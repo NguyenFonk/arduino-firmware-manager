@@ -1,0 +1,2234 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trình Nạp & Quản Lý Dự Án Firmware Arduino Uno</title>
+
+  <!--
+    Nạp thư viện tạo mã QR (qrcodejs) từ CDN với phiên bản ghim cố định 1.0.0
+  -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!--
+    Nạp thư viện avrgirl-arduino bản chạy trên trình duyệt từ CDN (jsDelivr) với phiên bản ghim cố định.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/avrgirl-arduino@5.0.1/dist/avrgirl-arduino.global.js"></script>
+  <script>
+    if (typeof window.AvrgirlArduino === 'undefined') {
+      document.write(
+        '<script src="https://cdn.jsdelivr.net/npm/@sienci/avrgirl-arduino@5.0.3/dist/avrgirl-arduino.global.min.js"><\/script>'
+      );
+    }
+  </script>
+
+  <style>
+    /* ==========================================================================
+       THIẾT KẾ GIAO DIỆN (CSS) - HỖ TRỢ SÁNG/TỐI THEO HỆ THỐNG, ƯU TIÊN DI ĐỘNG
+       ========================================================================== */
+    :root {
+      --bg-page: #f0f7f6;
+      --bg-surface: #ffffff;
+      --bg-muted: #e6f2f0;
+      --bg-log: #0f172a;
+      --text-log: #e2e8f0;
+      --text-primary: #0f172a;
+      --text-secondary: #334155;
+      --text-muted: #64748b;
+      --border-color: #cbd5e1;
+      --primary: #0d9488;
+      --primary-hover: #0f766e;
+      --primary-soft: #ccfbf1;
+      --accent: #0284c7;
+      --accent-soft: #e0f2fe;
+      --status-idle-bg: #e2e8f0;
+      --status-idle-text: #1e293b;
+      --status-conn-bg: #d1fae5;
+      --status-conn-text: #065f46;
+      --status-busy-bg: #dbeafe;
+      --status-busy-text: #1e40af;
+      --status-ok-bg: #dcfce7;
+      --status-ok-text: #166534;
+      --status-err-bg: #fee2e2;
+      --status-err-text: #991b1b;
+      --warn-bg: #fef3c7;
+      --warn-border: #f59e0b;
+      --warn-text: #92400e;
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+      --shadow-md: 0 6px 18px rgba(13, 148, 136, 0.12);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-page: #0b131e;
+        --bg-surface: #131f2e;
+        --bg-muted: #1b2b3f;
+        --bg-log: #070c14;
+        --text-log: #e2e8f0;
+        --text-primary: #f1f5f9;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border-color: #2dd4bf33;
+        --primary: #14b8a6;
+        --primary-hover: #2dd4bf;
+        --primary-soft: #115e59;
+        --accent: #38bdf8;
+        --accent-soft: #0c4a6e;
+        --status-idle-bg: #1e293b;
+        --status-idle-text: #e2e8f0;
+        --status-conn-bg: #064e3b;
+        --status-conn-text: #a7f3d0;
+        --status-busy-bg: #1e3a8a;
+        --status-busy-text: #bfdbfe;
+        --status-ok-bg: #14532d;
+        --status-ok-text: #bbf7d0;
+        --status-err-bg: #7f1d1d;
+        --status-err-text: #fecaca;
+        --warn-bg: #451a03;
+        --warn-border: #d97706;
+        --warn-text: #fde68a;
+        --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+        --shadow-md: 0 6px 20px rgba(20, 184, 166, 0.18);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-primary);
+      line-height: 1.55;
+      padding-bottom: 2.5rem;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    /* Đầu trang & Thanh trạng thái tổng */
+    header {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: #ffffff;
+      padding: 1.25rem 1rem;
+      border-radius: var(--radius-lg);
+      margin-bottom: 1.15rem;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .header-top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      font-size: 1.22rem;
+      font-weight: 700;
+    }
+
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .btn-connect-usb {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      background-color: rgba(255, 255, 255, 0.18);
+      color: #ffffff;
+      border: 1.5px solid rgba(255, 255, 255, 0.55);
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background-color 0.15s ease;
+    }
+
+    .btn-connect-usb:hover:not(:disabled) {
+      background-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-connect-usb:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .brand-subtitle {
+      font-size: 0.92rem;
+      opacity: 0.95;
+    }
+
+    /* Thanh trạng thái */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      transition: all 0.2s ease;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: currentColor;
+    }
+
+    .status-idle {
+      background-color: var(--status-idle-bg);
+      color: var(--status-idle-text);
+    }
+
+    .status-connected {
+      background-color: var(--status-conn-bg);
+      color: var(--status-conn-text);
+    }
+
+    .status-flashing {
+      background-color: var(--status-busy-bg);
+      color: var(--status-busy-text);
+    }
+
+    .status-success {
+      background-color: var(--status-ok-bg);
+      color: var(--status-ok-text);
+    }
+
+    .status-error {
+      background-color: var(--status-err-bg);
+      color: var(--status-err-text);
+    }
+
+    /* Hộp giải thích kết nối USB & Cảnh báo trình duyệt */
+    .browser-warning {
+      display: none;
+      background-color: var(--warn-bg);
+      border: 2px solid var(--warn-border);
+      color: var(--warn-text);
+      padding: 0.95rem 1.05rem;
+      border-radius: var(--radius-md);
+      margin-bottom: 1.15rem;
+      font-size: 0.93rem;
+    }
+
+    .browser-warning.visible {
+      display: block;
+    }
+
+    .browser-warning strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 0.3rem;
+    }
+
+    /* Bố cục chính */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+    }
+
+    @media (min-width: 840px) {
+      .main-grid {
+        grid-template-columns: 1fr 1.35fr;
+        align-items: start;
+      }
+    }
+
+    .panel {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 1.15rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .panel-title {
+      font-size: 1.06rem;
+      font-weight: 700;
+      margin-bottom: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      color: var(--text-primary);
+      flex-wrap: wrap;
+    }
+
+    /* Nút (+) Thêm dự án mới */
+    .btn-add-project {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background-color: var(--primary);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.45rem 0.8rem;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background-color 0.15s ease;
+    }
+
+    .btn-add-project:hover {
+      background-color: var(--primary-hover);
+    }
+
+    /* Danh sách mẫu dạng thẻ (Card) */
+    .project-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .project-card {
+      width: 100%;
+      text-align: left;
+      background-color: var(--bg-surface);
+      color: var(--text-primary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 0.95rem;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      font-family: inherit;
+    }
+
+    .project-card:hover {
+      border-color: var(--primary);
+    }
+
+    .project-card.active {
+      border-color: var(--primary);
+      background-color: var(--bg-muted);
+      box-shadow: var(--shadow-md);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .card-name {
+      font-size: 1.02rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .badges {
+      display: flex;
+      gap: 0.35rem;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .badge {
+      font-size: 0.74rem;
+      font-weight: 700;
+      padding: 0.18rem 0.5rem;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+
+    .badge-board {
+      background-color: var(--primary-soft);
+      color: var(--primary-hover);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .badge-board {
+        color: #99f6e4;
+      }
+    }
+
+    .badge-version {
+      background-color: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .badge-hex-ready {
+      background-color: var(--status-ok-bg);
+      color: var(--status-ok-text);
+    }
+
+    .card-desc {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+
+    /* Chi tiết mẫu được chọn & Sửa tên */
+    .detail-header {
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .detail-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.35rem;
+    }
+
+    .detail-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    /* Khung sửa tên trực tiếp */
+    .rename-box {
+      display: none;
+      align-items: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      margin-top: 0.45rem;
+      margin-bottom: 0.45rem;
+      padding: 0.6rem;
+      background-color: var(--bg-muted);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+    }
+
+    .rename-box.visible {
+      display: flex;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 0.55rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-surface);
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      font-family: inherit;
+    }
+
+    .input-field:focus {
+      outline: 2px solid var(--primary);
+      border-color: transparent;
+    }
+
+    .detail-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      font-size: 0.86rem;
+      color: var(--text-muted);
+      margin-top: 0.45rem;
+    }
+
+    .detail-section {
+      margin-bottom: 1rem;
+    }
+
+    .detail-label {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .wiring-box {
+      background-color: var(--bg-muted);
+      border-left: 4px solid var(--primary);
+      padding: 0.7rem 0.9rem;
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      font-size: 0.92rem;
+      color: var(--text-primary);
+    }
+
+    /* Khung hiển thị mã nguồn .ino */
+    .code-viewer {
+      background-color: var(--bg-log);
+      color: var(--text-log);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.82rem;
+      padding: 0.85rem;
+      border-radius: var(--radius-md);
+      max-height: 220px;
+      overflow-y: auto;
+      white-space: pre;
+      border: 1px solid var(--border-color);
+    }
+
+    /* Khung tùy chọn nạp file .hex trực tiếp từ máy */
+    .hex-picker-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.65rem 0.85rem;
+      background-color: var(--bg-muted);
+      border: 1px dashed var(--border-color);
+      border-radius: var(--radius-md);
+      margin-bottom: 0.9rem;
+      font-size: 0.86rem;
+    }
+
+    /* Nút bấm */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      min-height: 48px;
+      padding: 0.7rem 1.15rem;
+      font-size: 1rem;
+      font-weight: 700;
+      border-radius: var(--radius-md);
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background-color 0.15s ease, opacity 0.15s ease;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      width: 100%;
+      background-color: var(--primary);
+      color: #ffffff;
+      font-size: 1.06rem;
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background-color: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background-color: var(--bg-muted);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      min-height: 38px;
+      font-size: 0.86rem;
+      padding: 0.45rem 0.8rem;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      border-color: var(--primary);
+    }
+
+    /* Gợi ý nhận diện cổng USB */
+    .port-hint-box {
+      display: none;
+      margin-top: 0.9rem;
+      padding: 0.8rem 0.95rem;
+      border-radius: var(--radius-md);
+      background-color: var(--bg-muted);
+      border: 1px solid var(--border-color);
+      font-size: 0.9rem;
+    }
+
+    .port-hint-box.visible {
+      display: block;
+    }
+
+    .port-hint-title {
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 0.2rem;
+    }
+
+    .port-hint-note {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    /* Thanh tiến trình & 5 bước trạng thái */
+    .progress-wrapper {
+      margin-top: 1rem;
+      padding: 0.9rem;
+      background-color: var(--bg-muted);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+    }
+
+    .progress-bar-track {
+      width: 100%;
+      height: 12px;
+      background-color: var(--border-color);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 0.7rem;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      transition: width 0.25s ease;
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.35rem;
+      text-align: center;
+    }
+
+    .step-item {
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 0.35rem 0.2rem;
+      border-radius: 6px;
+      background-color: var(--bg-surface);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+    }
+
+    .step-item.active {
+      background-color: var(--status-busy-bg);
+      color: var(--status-busy-text);
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+
+    .step-item.done {
+      background-color: var(--status-ok-bg);
+      color: var(--status-ok-text);
+      border-color: var(--primary);
+    }
+
+    .step-item.error {
+      background-color: var(--status-err-bg);
+      color: var(--status-err-text);
+    }
+
+    /* Hộp thông báo lỗi */
+    .error-banner {
+      display: none;
+      margin-top: 0.9rem;
+      padding: 0.85rem 0.95rem;
+      border-radius: var(--radius-md);
+      background-color: var(--status-err-bg);
+      color: var(--status-err-text);
+      font-size: 0.9rem;
+      border: 1px solid currentColor;
+      white-space: pre-line;
+    }
+
+    .error-banner.visible {
+      display: block;
+    }
+
+    /* Khu vực mã QR */
+    .qr-section {
+      margin-top: 1.15rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .qr-box {
+      background-color: #ffffff;
+      padding: 0.55rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 152px;
+      min-height: 152px;
+    }
+
+    .qr-info {
+      flex: 1;
+      min-width: 210px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .share-url {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.82rem;
+      background-color: var(--bg-muted);
+      padding: 0.45rem 0.65rem;
+      border-radius: 6px;
+      word-break: break-all;
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+    }
+
+    /* Khung Nhật ký (Log) */
+    .log-panel {
+      margin-top: 1.25rem;
+    }
+
+    .log-output {
+      background-color: var(--bg-log);
+      color: var(--text-log);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.84rem;
+      padding: 0.85rem;
+      border-radius: var(--radius-md);
+      height: 220px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid var(--border-color);
+    }
+
+    /* Modal (+) Thêm dự án mới */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background-color: rgba(15, 23, 42, 0.65);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .modal-backdrop.visible {
+      display: flex;
+    }
+
+    .modal-card {
+      background-color: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      max-width: 620px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 1.25rem;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .form-group label {
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+    }
+
+    textarea.input-field {
+      min-height: 110px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.84rem;
+      resize: vertical;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.6rem;
+      margin-top: 0.4rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- ĐẦU TRANG & THANH TRẠNG THÁI RÕ RÀNG -->
+    <header>
+      <div class="header-top">
+        <div class="brand-title">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+            <rect x="9" y="9" width="6" height="6"></rect>
+            <line x1="9" y1="1" x2="9" y2="4"></line>
+            <line x1="15" y1="1" x2="15" y2="4"></line>
+            <line x1="9" y1="20" x2="9" y2="23"></line>
+            <line x1="15" y1="20" x2="15" y2="23"></line>
+            <line x1="20" y1="9" x2="23" y2="9"></line>
+            <line x1="20" y1="14" x2="23" y2="14"></line>
+            <line x1="1" y1="9" x2="4" y2="9"></line>
+            <line x1="1" y1="14" x2="4" y2="14"></line>
+          </svg>
+          <span>Trạm Nạp & Quản Lý Code Arduino Uno</span>
+        </div>
+
+        <div class="header-actions">
+          <button id="connectUsbBtn" type="button" class="btn-connect-usb">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            <span id="connectUsbBtnText">Kết nối cổng USB</span>
+          </button>
+
+          <div id="statusBadge" class="status-pill status-idle" role="status" aria-live="polite">
+            <span class="status-dot"></span>
+            <span id="statusText">Chưa kết nối</span>
+          </div>
+        </div>
+      </div>
+      <p class="brand-subtitle">
+        Đã sửa triệt để lỗi <code>Sending 6400004620: receiveData timeout</code> và nhúng sẵn cả 3 file <strong>pccc.hex</strong>, <strong>sketch_nov13b.ino.hex</strong>, <strong>ntm.ino.hex</strong>.
+      </p>
+    </header>
+
+    <!-- THÔNG BÁO KIỂM TRA TRÌNH DUYỆT (CHỨC NĂNG 1) -->
+    <div id="browserWarning" class="browser-warning" role="alert">
+      <strong>Trình duyệt hoặc khung xem trước hiện tại không cho phép gọi Web Serial API (navigator.serial)</strong>
+      <span>
+        Để kết nối cổng USB và nạp firmware, bạn hãy tải file <code>index.html</code> này về máy tính và mở bằng <strong>Google Chrome</strong> hoặc <strong>Microsoft Edge</strong> (qua <code>http://localhost</code> hoặc <code>https://</code>).
+        Trình duyệt trên <strong>iPhone / Safari</strong> và <strong>Firefox</strong> không hỗ trợ Web Serial; khung xem trước nhúng trong trang chat cũng có thể chặn quyền mở cổng USB.
+      </span>
+    </div>
+
+    <!-- BỐ CỤC CHÍNH -->
+    <div class="main-grid">
+      <!-- CỘT TRÁI: DANH SÁCH MẪU CODE DẠNG THẺ + NÚT (+) THÊM DỰ ÁN -->
+      <section class="panel" aria-labelledby="listHeading">
+        <div class="panel-title">
+          <div>
+            <span id="listHeading">Danh sách dự án</span>
+            <span id="projectCount" style="font-size: 0.82rem; color: var(--text-muted); font-weight: 500; margin-left: 0.35rem;"></span>
+          </div>
+          <button id="openAddModalBtn" type="button" class="btn-add-project" title="Thêm code dự án mới">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Thêm dự án</span>
+          </button>
+        </div>
+        <div id="projectList" class="project-list"></div>
+      </section>
+
+      <!-- CỘT PHẢI: CHI TIẾT MẪU, SỬA TÊN, XEM CODE .INO, NÚT NẠP, TIẾN TRÌNH & MÃ QR -->
+      <section class="panel" aria-labelledby="detailTitle">
+        <div class="detail-header">
+          <div class="detail-title-row">
+            <h2 id="detailTitle" class="detail-title">Đang tải mẫu...</h2>
+            <button id="toggleRenameBtn" type="button" class="btn btn-secondary" title="Đổi tên dự án này">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+              </svg>
+              <span>Sửa tên</span>
+            </button>
+          </div>
+
+          <div id="renameBox" class="rename-box">
+            <input id="renameInput" type="text" class="input-field" style="flex: 1; min-width: 180px;" placeholder="Nhập tên mới cho dự án..." />
+            <button id="saveRenameBtn" type="button" class="btn btn-secondary" style="background-color: var(--primary); color: #fff; border: none;">Lưu tên</button>
+            <button id="cancelRenameBtn" type="button" class="btn btn-secondary">Hủy</button>
+          </div>
+
+          <p id="detailDesc" class="card-desc"></p>
+          <div class="detail-meta">
+            <span><strong>Board:</strong> <span id="detailBoard"></span></span>
+            <span>•</span>
+            <span><strong>Phiên bản:</strong> <span id="detailVersion"></span></span>
+            <span>•</span>
+            <span><strong>File HEX:</strong> <code id="detailHexPath"></code></span>
+          </div>
+        </div>
+
+        <div id="wiringSection" class="detail-section">
+          <div class="detail-label">Ghi chú đấu dây</div>
+          <div id="detailWiring" class="wiring-box"></div>
+        </div>
+
+        <!-- KHUNG XEM MÃ NGUỒN ARDUINO (.INO) -->
+        <div class="detail-section">
+          <div class="detail-label">
+            <span>Mã nguồn Arduino (<code id="detailInoFileName">code.ino</code>)</span>
+            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+              <button id="copyInoBtn" type="button" class="btn btn-secondary" style="min-height: 32px; padding: 0.25rem 0.65rem; font-size: 0.8rem;">
+                <span id="copyInoText">Sao chép code .ino</span>
+              </button>
+              <button id="downloadInoBtn" type="button" class="btn btn-secondary" style="min-height: 32px; padding: 0.25rem 0.65rem; font-size: 0.8rem;">
+                <span>Tải file .ino</span>
+              </button>
+              <button id="downloadHexBtn" type="button" class="btn btn-secondary" style="min-height: 32px; padding: 0.25rem 0.65rem; font-size: 0.8rem;">
+                <span>Tải file .hex</span>
+              </button>
+            </div>
+          </div>
+          <pre id="detailInoCode" class="code-viewer"></pre>
+        </div>
+
+        <!-- THANH CHỌN FILE .HEX TỪ MÁY TÍNH -->
+        <div class="hex-picker-bar">
+          <div>
+            <strong>Trạng thái file .hex:</strong> <span id="hexSourceStatus">Đã nhúng sẵn bản biên dịch chuẩn</span>
+          </div>
+          <div>
+            <input id="customHexFileInput" type="file" accept=".hex,.txt" style="display: none;" />
+            <button id="pickHexFileBtn" type="button" class="btn btn-secondary" style="min-height: 34px; padding: 0.3rem 0.7rem; font-size: 0.82rem;">
+              Chọn file .hex từ máy
+            </button>
+          </div>
+        </div>
+
+        <!-- NÚT NẠP VÀO BOARD -->
+        <button id="flashBtn" type="button" class="btn btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <span>Nạp vào board</span>
+        </button>
+
+        <!-- HỘP GỢI Ý NHẬN DIỆN CỔNG USB (CHỨC NĂNG 4) -->
+        <div id="portHintBox" class="port-hint-box" aria-live="polite">
+          <div id="portHintTitle" class="port-hint-title"></div>
+          <div class="port-hint-note">
+            Lưu ý: Đây chỉ là <strong>GỢI Ý</strong> dựa trên mã USB Vendor ID / Product ID của chip giao tiếp USB, hoàn toàn không dùng để tự động quyết định nạp, vì mã Vendor ID không phân biệt được Arduino Uno với Nano hay Mega.
+          </div>
+        </div>
+
+        <!-- THANH TIẾN TRÌNH & 5 BƯỚC TRẠNG THÁI (CHỨC NĂNG 3) -->
+        <div class="progress-wrapper" aria-label="Tiến trình nạp firmware">
+          <div class="progress-bar-track">
+            <div id="progressBarFill" class="progress-bar-fill"></div>
+          </div>
+          <div class="steps-grid">
+            <div id="step-connect" class="step-item">1. Kết nối</div>
+            <div id="step-erase" class="step-item">2. Xóa</div>
+            <div id="step-write" class="step-item">3. Ghi</div>
+            <div id="step-verify" class="step-item">4. Kiểm tra</div>
+            <div id="step-done" class="step-item">5. Hoàn tất</div>
+          </div>
+        </div>
+
+        <!-- THÔNG BÁO LỖI TIẾNG VIỆT DỄ HIỂU (CHỨC NĂNG 6) -->
+        <div id="errorBanner" class="error-banner" role="alert"></div>
+
+        <!-- MÃ QR TRỎ TỚI LINK CÓ HASH CỦA MẪU (CHỨC NĂNG 7) -->
+        <div class="qr-section">
+          <div id="qrContainer" class="qr-box" aria-label="Mã QR chia sẻ mẫu code"></div>
+          <div class="qr-info">
+            <div class="detail-label">Liên kết & Mã QR của mẫu này</div>
+            <div id="shareUrlBox" class="share-url"></div>
+            <div>
+              <button id="downloadQrBtn" type="button" class="btn btn-secondary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Tải ảnh QR (.png)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- KHUNG NHẬT KÝ (LOG) & NÚT SAO CHÉP LOG (CHỨC NĂNG 5) -->
+    <section class="panel log-panel" aria-labelledby="logHeading">
+      <div class="panel-title">
+        <span id="logHeading">Nhật ký hoạt động (Log)</span>
+        <button id="copyLogBtn" type="button" class="btn btn-secondary">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span id="copyLogText">Sao chép log</span>
+        </button>
+      </div>
+      <pre id="logOutput" class="log-output"></pre>
+    </section>
+  </div>
+
+  <!-- HỘP THOẠI MODAL (+) THÊM DỰ ÁN MỚI -->
+  <div id="addProjectModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <div class="panel-title" style="margin-bottom: 0;">
+        <span id="modalTitle">Thêm code dự án Arduino Uno mới</span>
+        <button id="closeAddModalBtn" type="button" class="btn btn-secondary" style="min-height: 34px; padding: 0.25rem 0.65rem;">Đóng</button>
+      </div>
+
+      <div class="form-group">
+        <label for="newProjName">Tên dự án (*)</label>
+        <input id="newProjName" type="text" class="input-field" placeholder="Ví dụ: Hệ thống tưới cây tự động" />
+      </div>
+
+      <div class="form-group">
+        <label for="newProjDesc">Mô tả ngắn</label>
+        <input id="newProjDesc" type="text" class="input-field" placeholder="Mô tả chức năng chính của mạch..." />
+      </div>
+
+      <div class="form-group">
+        <label for="newProjWiring">Ghi chú đấu dây (chân cảm biến, linh kiện)</label>
+        <input id="newProjWiring" type="text" class="input-field" placeholder="Ví dụ: Cảm biến -> A0, Relay máy bơm -> D4..." />
+      </div>
+
+      <div class="form-group">
+        <label for="newProjInoCode">
+          Mã nguồn Arduino (.ino)
+          <input id="newProjInoFile" type="file" accept=".ino,.cpp,.c,.txt" style="font-weight: 400; font-size: 0.8rem; margin-left: 0.5rem;" />
+        </label>
+        <textarea id="newProjInoCode" class="input-field" placeholder="// Dán code Arduino (.ino) vào đây hoặc chọn file .ino ở trên..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="newProjHexFile">
+          File biên dịch .hex (dùng để nạp trực tiếp từ trình duyệt)
+        </label>
+        <input id="newProjHexFile" type="file" accept=".hex,.txt" class="input-field" />
+      </div>
+
+      <div id="modalErrorMsg" style="color: var(--status-err-text); font-size: 0.86rem; display: none;"></div>
+
+      <div class="modal-actions">
+        <button id="cancelAddModalBtn" type="button" class="btn btn-secondary">Hủy</button>
+        <button id="confirmAddProjBtn" type="button" class="btn btn-secondary" style="background-color: var(--primary); color: #ffffff; border: none;">
+          Lưu & Thêm dự án
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       KHỐI 1: CẤU HÌNH MẪU CODE (PROJECTS)
+       ========================================================================== */
+    const FALLBACK_INTEL_HEX = ":100000000C9434000C943E000C943E000C943E0082\n:100010000C943E000C943E000C943E000C943E0068\n:00000001FF\n";
+
+    const PROJECTS = [
+  {
+    "id": "pccc",
+    "name": "Hệ thống PCCC (pccc.ino)",
+    "description": "Đọc cảm biến khí Gas (A0) và cảm biến Lửa (A1); điều khiển Còi (D7), Quạt thông gió (D5), Máy bơm chữa cháy (D4) và góc quay Servo (D6) theo 2 cấp độ cảnh báo.",
+    "board": "uno",
+    "hexPath": "firmware/pccc.hex",
+    "version": "1.0.0",
+    "wiringNote": "Cảm biến Gas -> A0 | Cảm biến Lửa -> A1 | Máy bơm -> D4 | Quạt thông gió -> D5 | Servo -> D6 | Còi báo động -> D7 | Serial Monitor: 9600 baud.",
+    "inoFileName": "pccc.ino",
+    "inoCode": "\n#include <Arduino.h>\n\n// =====================================================\n//              KHAI BAO CHAN KET NOI\n// =====================================================\n\n// Cam bien\n#define GAS_PIN       A0\n#define FLAME_PIN     A1\n\n// Thiet bi dieu khien\n#define BOM_PIN       4\n#define QUAT_PIN      5\n#define SERVO_PIN     6\n#define COI_PIN       7\n\n\n// =====================================================\n//              CAU HINH NGUONG CAM BIEN\n// =====================================================\n\n#define NGUONG_GAS    550\n#define NGUONG_LUA    550\n\n// Thoi gian cap nhat Serial\n#define CHU_KY_SERIAL 2000UL\n\n// Chu ky phat xung Servo\n#define CHU_KY_SERVO  20000UL\n\n\n// =====================================================\n//              KHAI BAO BIEN\n// =====================================================\n\n// Gia tri cam bien\nint giaTriGas = 0;\nint giaTriLua = 0;\n\n// Trang thai cam bien\nbool phatHienGas = false;\nbool phatHienLua = false;\n\n// Goc Servo\nint gocServo = 0;\n\n// Bien thoi gian\nunsigned long thoiGianServo = 0;\nunsigned long thoiGianSerial = 0;\n\n\n// =====================================================\n//              DOC CAM BIEN\n// =====================================================\n\nvoid docCamBien()\n{\n  long tongGas = 0;\n  long tongLua = 0;\n\n  // Lay trung binh 5 lan doc\n  for (byte i = 0; i < 5; i++)\n  {\n    tongGas += analogRead(GAS_PIN);\n    tongLua += analogRead(FLAME_PIN);\n  }\n\n  giaTriGas = tongGas / 5;\n  giaTriLua = tongLua / 5;\n\n  // Xac dinh trang thai cam bien\n  phatHienGas = (giaTriGas > NGUONG_GAS);\n  phatHienLua = (giaTriLua < NGUONG_LUA);\n}\n\n\n// =====================================================\n//              DIEU KHIEN SERVO\n// =====================================================\n\n// Cai dat goc quay Servo\nvoid datGocServo(int goc)\n{\n  gocServo = constrain(goc, 0, 180);\n}\n\n// Phat xung dieu khien Servo\nvoid capNhatServo()\n{\n  unsigned long hienTai = micros();\n\n  // Moi 20ms phat mot xung\n  if (hienTai - thoiGianServo < CHU_KY_SERVO)\n    return;\n\n  thoiGianServo = hienTai;\n\n  // Chuyen goc quay thanh do rong xung\n  int doRongXung = map(gocServo, 0, 180, 1000, 2000);\n\n  digitalWrite(SERVO_PIN, HIGH);\n  delayMicroseconds(doRongXung);\n  digitalWrite(SERVO_PIN, LOW);\n}\n\n\n// =====================================================\n//              DIEU KHIEN HE THONG PCCC\n// =====================================================\n\nvoid dieuKhienHeThong()\n{\n  // ---------------------------------------------------\n  // MUC DO 2: PHAT HIEN CHAY\n  // Uu tien cao nhat\n  // ---------------------------------------------------\n\n  if (phatHienLua)\n  {\n    digitalWrite(COI_PIN, HIGH);\n    digitalWrite(QUAT_PIN, HIGH);\n    digitalWrite(BOM_PIN, HIGH);\n\n    datGocServo(90);\n\n    return;\n  }\n\n  // ---------------------------------------------------\n  // MUC DO 1: PHAT HIEN RO RI KHI GAS\n  // ---------------------------------------------------\n\n  if (phatHienGas)\n  {\n    digitalWrite(COI_PIN, HIGH);\n    digitalWrite(QUAT_PIN, HIGH);\n    digitalWrite(BOM_PIN, LOW);\n\n    datGocServo(60);\n\n    return;\n  }\n\n  // ---------------------------------------------------\n  // TRANG THAI BINH THUONG\n  // ---------------------------------------------------\n\n  digitalWrite(COI_PIN, LOW);\n  digitalWrite(QUAT_PIN, LOW);\n  digitalWrite(BOM_PIN, LOW);\n\n  datGocServo(0);\n}\n\n\n// =====================================================\n//              HIEN THI SERIAL MONITOR\n// =====================================================\n\nvoid hienThiSerial()\n{\n  Serial.println();\n  Serial.println(\"================================\");\n  Serial.println(\"       HE THONG PCCC\");\n  Serial.println(\"================================\");\n\n  // Thong tin cam bien Gas\n  Serial.print(\"Cam bien Gas: \");\n  Serial.print(giaTriGas);\n  Serial.print(\" | Nguong: \");\n  Serial.println(NGUONG_GAS);\n\n  Serial.print(\"Trang thai Gas: \");\n\n  if (phatHienGas)\n    Serial.println(\"CANH BAO RO RI KHI GAS!\");\n  else\n    Serial.println(\"AN TOAN\");\n\n  Serial.println(\"--------------------------------\");\n\n  // Thong tin cam bien lua\n  Serial.print(\"Cam bien Lua: \");\n  Serial.print(giaTriLua);\n  Serial.print(\" | Nguong: \");\n  Serial.println(NGUONG_LUA);\n\n  Serial.print(\"Trang thai Lua: \");\n\n  if (phatHienLua)\n    Serial.println(\"NGUY HIEM - PHAT HIEN CHAY!\");\n  else\n    Serial.println(\"KHONG PHAT HIEN LUA\");\n\n  Serial.println(\"--------------------------------\");\n\n  // Trang thai he thong\n  if (phatHienLua)\n  {\n    Serial.println(\"CANH BAO CAP 2: CO CHAY!\");\n  }\n  else if (phatHienGas)\n  {\n    Serial.println(\"CANH BAO CAP 1: RO RI GAS!\");\n  }\n  else\n  {\n    Serial.println(\"HE THONG DANG AN TOAN\");\n  }\n\n  Serial.println(\"--------------------------------\");\n\n  // Trang thai cac thiet bi\n  Serial.print(\"Coi bao dong: \");\n  Serial.println((phatHienGas || phatHienLua) ? \"BAT\" : \"TAT\");\n\n  Serial.print(\"Quat thong gio: \");\n  Serial.println((phatHienGas || phatHienLua) ? \"BAT\" : \"TAT\");\n\n  Serial.print(\"May bom chua chay: \");\n  Serial.println(phatHienLua ? \"BAT\" : \"TAT\");\n\n  Serial.print(\"Goc Servo: \");\n  Serial.print(gocServo);\n  Serial.println(\" do\");\n\n  Serial.println(\"================================\");\n}\n\n\n// =====================================================\n//              KHOI TAO HE THONG\n// =====================================================\n\nvoid setup()\n{\n  // Khoi tao cac chan dau ra\n  pinMode(COI_PIN, OUTPUT);\n  pinMode(QUAT_PIN, OUTPUT);\n  pinMode(BOM_PIN, OUTPUT);\n  pinMode(SERVO_PIN, OUTPUT);\n\n  // Khoi tao cac chan dau vao\n  pinMode(GAS_PIN, INPUT);\n  pinMode(FLAME_PIN, INPUT);\n\n  // Tat toan bo thiet bi ban dau\n  digitalWrite(COI_PIN, LOW);\n  digitalWrite(QUAT_PIN, LOW);\n  digitalWrite(BOM_PIN, LOW);\n  digitalWrite(SERVO_PIN, LOW);\n\n  // Khoi dong Serial Monitor\n  Serial.begin(9600);\n\n  Serial.println(\"================================\");\n  Serial.println(\"DANG KHOI DONG HE THONG PCCC...\");\n  Serial.println(\"================================\");\n\n  // Dat Servo ve goc ban dau\n  datGocServo(0);\n\n  delay(500);\n\n  Serial.println(\"HE THONG SAN SANG!\");\n}\n\n\n// =====================================================\n//              CHUONG TRINH CHINH\n// =====================================================\n\nvoid loop()\n{\n  // Buoc 1: Doc gia tri cam bien\n  docCamBien();\n\n  // Buoc 2: Xu ly va dieu khien thiet bi\n  dieuKhienHeThong();\n\n  // Buoc 3: Cap nhat xung dieu khien Servo\n  capNhatServo();\n\n  // Buoc 4: Hien thi thong tin moi 2 giay\n  if (millis() - thoiGianSerial >= CHU_KY_SERIAL)\n  {\n    thoiGianSerial = millis();\n\n    hienThiSerial();\n  }\n}\n",
+    "hexFileName": "pccc.hex",
+    "hexContent": ":100000000C945D000C9485000C9485000C94850084\n:100010000C9485000C9485000C9485000C9485004C\n:100020000C9485000C9485000C9485000C9485003C\n:100030000C9485000C9485000C9485000C9485002C\n:100040000C9417030C9485000C9487030C946103A3\n:100050000C9485000C9485000C9485000C9485000C\n:100060000C9485000C9485000000000024002700FB\n:100070002A0000000000250028002B0004040404CE\n:100080000404040402020202020203030303030342\n:10009000010204081020408001020408102001021F\n:1000A00004081020000000080002010000030407FB\n:1000B0000000000000000000100611241FBECFEF5A\n:1000C000D8E0DEBFCDBF12E0A0E0B1E0E8E3FDE0A4\n:1000D00002C005900D92A234B107D9F722E0A2E444\n:1000E000B2E001C01D92A83FB207E1F710E0CDE5F4\n:1000F000D0E004C02197FE010E949406CC35D107C0\n:10010000C9F70E94B9030C949A060C94000090E081\n:10011000FC01EC55FF4F2491FC01E057FF4F349157\n:10012000FC01E458FF4FE491EE23C9F0222339F09B\n:10013000233001F1A8F4213019F1223029F1F0E047\n:10014000EE0FFF1FEE58FF4FA591B4918FB7F894B3\n:10015000EC91611126C030953E233C938FBF0895EA\n:100160002730A9F02830C9F0243049F78091800069\n:100170008F7D03C0809180008F7780938000DFCFD8\n:1001800084B58F7784BDDBCF84B58F7DFBCF809125\n:10019000B0008F778093B000D2CF8091B0008F7D78\n:1001A000F9CF3E2BDACFCF93DF9390E0FC01E057FD\n:1001B000FF4F249184589F4FFC0184918823D1F0F4\n:1001C00090E0880F991FFC01E859FF4FA591B49169\n:1001D000FC01EE58FF4FC591D49161110EC09FB73D\n:1001E000F8948C91E22FE0958E238C932881E22362\n:1001F000E8839FBFDF91CF9108958FB7F894EC917A\n:10020000E22BEC938FBFF6CF8E50806480937C00FE\n:1002100080917A00806480937A0080917A0086FDD4\n:10022000FCCF809178009091790008953FB7F894C1\n:100230008091570290915802A0915902B0915A02B0\n:1002400026B5A89B05C02F3F19F00196A11DB11D31\n:100250003FBFBA2FA92F982F8827BC01CD01620F6D\n:10026000711D811D911D42E0660F771F881F991F28\n:100270004A95D1F708958F929F92AF92BF92CF92F5\n:10028000DF92EF92FF924B015C010E9416016B011D\n:100290007C010E9416016C197D098E099F09683E38\n:1002A000734081059105A8F321E0821A9108A10805\n:1002B000B10888EEC80E83E0D81EE11CF11C811441\n:1002C0009104A104B10429F7FF90EF90DF90CF9043\n:1002D000BF90AF909F908F900895AF92BF92CF92B2\n:1002E000DF92EF92FF920F931F93CF93DF936C01F6\n:1002F0007B018B01040F151FEB015E01AE18BF08D7\n:10030000C017D10759F06991D601ED91FC91019088\n:10031000F081E02DC6010995892B79F7C501DF91A0\n:10032000CF911F910F91FF90EF90DF90CF90BF90F2\n:10033000AF900895FC01538D448D252F30E0842F1C\n:1003400090E0821B930B541710F0CF9608950197FD\n:100350000895FC01918D828D981761F0A28DAE0FEA\n:10036000BF2FB11D5D968C91928D9F5F9F73928F71\n:1003700090E008958FEF9FEF0895FC01918D828D9D\n:10038000981731F0828DE80FF11D858D90E008956A\n:100390008FEF9FEF0895FC01918D228D892F90E0C2\n:1003A000805C9F4F821B91098F73992708958BE57D\n:1003B00092E00E94CB0121E0892B09F420E0822FFA\n:1003C000089580E090E0892B29F00E94D7018111E7\n:1003D0000C9400000895FC01A48DA80FB92FB11D45\n:1003E000A35ABF4F2C91848D90E001968F7399276B\n:1003F000848FA689B7892C93A089B1898C91837049\n:1004000080648C93938D848D981306C00288F38941\n:10041000E02D80818F7D80830895EF92FF920F936E\n:100420001F93CF93DF93EC0181E0888F9B8D8C8DA0\n:1004300098131AC0E889F989808185FF15C09FB794\n:10044000F894EE89FF896083E889F9898081837057\n:10045000806480839FBF81E090E0DF91CF911F9106\n:100460000F91FF90EF900895F62E0B8D10E00F5F27\n:100470001F4F0F731127E02E8C8D8E110CC00FB6FD\n:1004800007FCFACFE889F989808185FFF5CFCE0195\n:100490000E94EB01F1CFEB8DEC0FFD2FF11DE35A24\n:1004A000FF4FF0829FB7F8940B8FEA89FB89808118\n:1004B0008062CFCFCF93DF93EC01888D8823B9F092\n:1004C000AA89BB89E889F9898C9185FD03C080815F\n:1004D00086FD0DC00FB607FCF7CF8C9185FFF2CFDC\n:1004E000808185FFEDCFCE010E94EB01E9CFDF9146\n:1004F000CF910895FC0101900020E9F73197AF01F9\n:10050000481B590BBC018BE592E00C946D018F9256\n:100510009F92AF92BF920F931F93CF93DF93CDB76C\n:10052000DEB7A1970FB6F894DEBF0FBECDBF19A2FC\n:10053000423008F44AE08E010F5D1F4F842E912C4B\n:10054000B12CA12CA50194010E945C06E62FB901F3\n:10055000CA01EA30F4F4E05DD801EE938D01232B5B\n:10056000242B252B79F790E080E0109719F0CD012E\n:100570000E947A02A1960FB6F894DEBF0FBECDBFDF\n:10058000DF91CF911F910F91BF90AF909F908F906F\n:100590000895E95CE1CFCF92DF92EF92FF92CF9383\n:1005A000DF936B017C016DE28BE592E00E940D020E\n:1005B000EC0166277727CB016C197D098E099F090D\n:1005C0004AE00E9487028C0F9D1FDF91CF91FF9020\n:1005D000EF90DF90CF900895CF93DF930E947A023F\n:1005E000EC0182E191E00E947A028C0F9D1FDF9165\n:1005F000CF910895CF93DF93BC01990F880B990B8E\n:100600004AE00E948702EC0182E191E00E947A02B6\n:100610008C0F9D1FDF91CF910895BC01990F880B1E\n:10062000990B97FD0C94CB024AE00C9487021F9221\n:100630000F920FB60F9211242F933F938F939F9396\n:10064000AF93BF938091530290915402A0915502B1\n:10065000B09156023091520223E0230F2D3758F506\n:100660000196A11DB11D20935202809353029093D5\n:100670005402A0935502B093560280915702909174\n:100680005802A0915902B0915A020196A11DB11DC4\n:100690008093570290935802A0935902B0935A0244\n:1006A000BF91AF919F918F913F912F910F900FBE6E\n:1006B0000F901F90189526E8230F0296A11DB11DDB\n:1006C000D2CF1F920F920FB60F9211242F933F9308\n:1006D0004F935F936F937F938F939F93AF93BF934A\n:1006E000EF93FF938BE592E00E94EB01FF91EF9176\n:1006F000BF91AF919F918F917F916F915F914F913A\n:100700003F912F910F900FBE0F901F9018951F9241\n:100710000F920FB60F9211242F938F939F93EF9305\n:10072000FF93E0916B02F0916C028081E091710285\n:10073000F091720282FD1BC09081809174028F5FE4\n:100740008F7320917502821741F0E0917402F0E0FE\n:10075000E55AFD4F958F80937402FF91EF919F9121\n:100760008F912F910F900FBE0F901F901895808141\n:10077000F4CF789484B5826084BD84B5816084BDF3\n:1007800085B5826085BD85B5816085BD80916E002F\n:10079000816080936E001092810080918100826060\n:1007A000809381008091810081608093810080919D\n:1007B00080008160809380008091B100846080938C\n:1007C000B1008091B00081608093B00080917A0088\n:1007D000846080937A0080917A00826080937A00AE\n:1007E00080917A00816080937A0080917A0080689D\n:1007F00080937A001092C10061E087E00E94D300EC\n:1008000061E085E00E94D30061E084E00E94D300B3\n:1008100061E086E00E94D30060E08EE00E94D30099\n:1008200060E08FE00E94D30060E087E00E948700D4\n:1008300060E085E00E94870060E084E00E9487001D\n:1008400060E086E00E948700E0916B02F0916C020C\n:1008500082E08083E0916702F09168021082E0916B\n:100860006902F0916A028FEC808310927302E0912A\n:100870006F02F091700286E08083E0916D02F0914A\n:100880006E02808180618083E0916D02F0916E0242\n:10089000808188608083E0916D02F0916E0280819A\n:1008A00080688083E0916D02F0916E0280818F7D7F\n:1008B00080838DE891E00E94EC0210924702109232\n:1008C000460264EF71E080E090E00E943B0194E01A\n:1008D000492E512C612C712C2AE5222E312C00E05E\n:1008E00010E0C4E0D0E0C12CD12C7601812C912CF9\n:1008F00054018EE00E940401092E000CAA0BBB0BD0\n:10090000880E991EAA1EBB1E8FE00E940401092EAC\n:10091000000CAA0BBB0BC80ED91EEA1EFB1E2197AA\n:1009200041F7C501B401A30192010E943D06E9010E\n:1009300030934D0220934C02C701B601A3019201EE\n:100940000E943D06C90130934A022093490221E0EA\n:10095000C93CD1050CF420E020934B0221E08639FC\n:1009600091050CF020E020934802863991050CF0A7\n:1009700021C161E087E00E94870061E085E00E947C\n:10098000870061E084E00E94870030924702209255\n:1009900046020E941601C0904202D0904302E090AD\n:1009A0004402F09045029B01AC012C193D094E090F\n:1009B0005F0969017A0130E2C3163EE4D306E1041F\n:1009C000F104A0F1609342027093430280934402C9\n:1009D00090934502A0914602B091470228EE33E081\n:1009E0000E948D0624EB30E040E050E00E943D067E\n:1009F00069017A0188EEC80E83E0D81EE11CF11C63\n:100A000061E086E00E94870092E0C916D10450F0B0\n:100A1000CC0CDD1CCC0CDD1C25E0C21AD108C601B3\n:100A20000197F1F760E086E00E9487002FB7F89405\n:100A30008091530290915402A0915502B0915602B8\n:100A40002FBF40914E0250914F0260915002709121\n:100A50005102841B950BA60BB70B803D9740A10557\n:100A6000B10508F495C02FB7F89480915302909186\n:100A70005402A0915502B09156022FBF80934E02AE\n:100A800090934F02A0935002B093510282E191E003\n:100A90000E947A028EEB91E00E94EC028FED91E0D1\n:100AA0000E94EC028EEB91E00E94EC028CEF91E050\n:100AB0000E947A0280914C0290914D020E940D0397\n:100AC00085E092E00E947A0288EC90E00E94FA02AF\n:100AD00080914B02811195C085E391E00E94EC0268\n:100AE00081E192E00E947A028091490290914A024B\n:100AF0000E940D0385E092E00E947A0286E990E070\n:100B00000E94FA028091480281117EC08AE691E03B\n:100B10000E94EC028AE192E00E947A0280914B02EC\n:100B2000811175C080914802811171C089E891E0FE\n:100B30000E94EC0283E292E00E947A0280914B02D2\n:100B4000811168C080914802811164C089E891E0F8\n:100B50000E94EC028CE292E00E947A0280914802AC\n:100B600081115BC089E891E00E94EC0285E392E08C\n:100B70000E947A0280914602909147020E940D03E2\n:100B80008EE392E00E94EC028EEB91E00E94EC0278\n:100B900064E170E080E090E00E943B0101151105E6\n:100BA00009F49FCE0E94D701882309F498CE0E94B1\n:100BB000000095CEC93CD1059CF061E087E00E9421\n:100BC000870061E085E00E94870060E084E00E9489\n:100BD00087002CE330E03093470220934602D9CEC1\n:100BE00060E087E00E94870060E085E00E94870067\n:100BF00060E084E00E948700109247021092460253\n:100C0000C8CE85E191E06ACF8CE491E081CF86E89F\n:100C100091E08ECF86E891E09BCF86E891E0A4CF6B\n:100C2000EBE5F2E01382128288EE93E0A0E0B0E000\n:100C300084839583A683B78384E091E09183808346\n:100C400085EC90E09587848784EC90E09787868791\n:100C500080EC90E0918B808B81EC90E0938B828B89\n:100C600082EC90E0958B848B86EC90E0978B868B62\n:100C7000118E128E138E148E0895052E97FB1EF47E\n:100C800000940E94540657FD07D00E945C0607FCA2\n:100C900003D04EF40C945406509540953095219510\n:100CA0003F4F4F4F5F4F0895909580957095619598\n:100CB0007F4F8F4F9F4F0895A1E21A2EAA1BBB1B97\n:100CC000FD010DC0AA1FBB1FEE1FFF1FA217B30718\n:100CD000E407F50720F0A21BB30BE40BF50B661F2E\n:100CE000771F881F991F1A9469F7609570958095F2\n:100CF00090959B01AC01BD01CF010895A29FB00169\n:100D0000B39FC001A39F700D811D1124911DB29F3F\n:100D1000700D811D1124911D08950E947E06B7FF5C\n:100D20000895821B930B0895EE0FFF1F0590F49119\n:080D3000E02D0994F894FFCFB7\n:100D3800000000000D026D019A015A02CB01A901C1\n:100D4800BD010D0A003D3E2043414E482042414F1F\n:100D58003A2050484154204849454E204B484920A4\n:100D680047415321003D3E205452414E47205448AC\n:100D780041493A20414E20544F414E003D3E204EBD\n:100D8800475559204849454D3A2050484154204834\n:100D980049454E204348415921003D3E2054524187\n:100DA8004E4720544841493A204B484F4E4720432C\n:100DB8004F204C5541004F4E004F464600484520B5\n:100DC80054484F4E47205043434320284B484F4EEA\n:100DD80047204F4C454429204B484F4920444F4E0B\n:100DE80047205448414E4820434F4E4721003D3D3F\n:100DF8003D3D3D3D3D3D3D3D3D3D3D3D3D3D3D3D1B\n:100E08003D3D3D3D3D3D3D3D3D3D3D3D3D3D002064\n:100E18002020205452414E472054484149204845FB\n:100E28002054484F4E4720504343430047415320E6\n:100E380020203A2000202F204E67756F6E673A20D9\n:100E480000464C414D45203A200042555A5A4552D9\n:100E58003A200046414E2020203A200050554D505F\n:100E680020203A2000534552564F203A2000204473\n:020E78004F0029\n:00000001FF"
+  },
+  {
+    "id": "smart-greenhouse",
+    "name": "Nhà kính thông minh - OLED (sketch_nov13b.ino)",
+    "description": "Đo độ ẩm đất (A0), nhiệt độ & độ ẩm không khí DHT11 (A1), cảm biến mưa (D5); tự động bật máy bơm (D4), kéo rèm Servo (D6) và hiển thị lên màn hình OLED I2C 0x3C.",
+    "board": "uno",
+    "hexPath": "firmware/sketch_nov13b.ino.hex",
+    "version": "1.0.0",
+    "wiringNote": "Độ ẩm đất -> A0 | DHT11 -> A1 | Máy bơm -> D4 | Cảm biến mưa -> D5 | Servo rèm -> D6 | OLED I2C (0x3C): SDA -> A4, SCL -> A5 | Serial Monitor: 9600 baud.",
+    "inoFileName": "sketch_nov13b.ino",
+    "inoCode": "\n#include <Wire.h>\n\n// =====================================================\n//                    KHAI BAO CHAN\n// =====================================================\n\n#define SERVO_PIN   6\n#define BOM_PIN     4\n#define RAIN_PIN    5\n\n#define SOIL_PIN    A0\n#define DHT_PIN     A1\n\n#define OLED_ADDR   0x3C\n\n\n// =====================================================\n//                    BIEN CAM BIEN\n// =====================================================\n\nfloat nhietDo = 0;\nfloat doAmKK = 0;\n\nint soilRaw = 0;\nint doAmDat = 0;\n\nbool dhtOK = false;\nbool rain = false;\n\n\n// =====================================================\n//                    OLED\n// =====================================================\n\n// Gui lenh cho OLED\nvoid oledCommand(byte c)\n{\n  Wire.beginTransmission(OLED_ADDR);\n  Wire.write(0x00);\n  Wire.write(c);\n  Wire.endTransmission();\n}\n\n// Gui du lieu cho OLED\nvoid oledData(byte d)\n{\n  Wire.beginTransmission(OLED_ADDR);\n  Wire.write(0x40);\n  Wire.write(d);\n  Wire.endTransmission();\n}\n\n// Khoi tao OLED\nvoid oledInit()\n{\n  delay(100);\n\n  oledCommand(0xAE);\n  oledCommand(0xD5);\n  oledCommand(0x80);\n  oledCommand(0xA8);\n  oledCommand(0x1F);\n  oledCommand(0xD3);\n  oledCommand(0x00);\n  oledCommand(0x40);\n  oledCommand(0x8D);\n  oledCommand(0x14);\n  oledCommand(0x20);\n  oledCommand(0x00);\n\n  // Chieu hien thi ban dau\n  oledCommand(0xA1);\n  oledCommand(0xC8);\n\n  oledCommand(0xDA);\n  oledCommand(0x02);\n  oledCommand(0x81);\n  oledCommand(0x8F);\n  oledCommand(0xD9);\n  oledCommand(0xF1);\n  oledCommand(0xDB);\n  oledCommand(0x40);\n  oledCommand(0xA4);\n  oledCommand(0xA6);\n  oledCommand(0xAF);\n}\n\n// Xoa toan bo man hinh OLED\nvoid oledClear()\n{\n  for (byte page = 0; page < 4; page++)\n  {\n    oledCommand(0xB0 + page);\n    oledCommand(0x00);\n    oledCommand(0x10);\n\n    for (byte i = 0; i < 128; i++)\n    {\n      oledData(0x00);\n    }\n  }\n}\n\n\n// =====================================================\n//                    FONT 5x7\n// =====================================================\n\nconst byte font5x7[][5] =\n{\n  {0,0,0,0,0},\n\n  // Chu cai A-Z\n  {0x7E,0x11,0x11,0x11,0x7E},\n  {0x7F,0x49,0x49,0x49,0x36},\n  {0x3E,0x41,0x41,0x41,0x22},\n  {0x7F,0x41,0x41,0x22,0x1C},\n  {0x7F,0x49,0x49,0x49,0x41},\n  {0x7F,0x09,0x09,0x09,0x01},\n  {0x3E,0x41,0x49,0x49,0x7A},\n  {0x7F,0x08,0x08,0x08,0x7F},\n  {0x00,0x41,0x7F,0x41,0x00},\n  {0x20,0x40,0x41,0x3F,0x01},\n  {0x7F,0x08,0x14,0x22,0x41},\n  {0x7F,0x40,0x40,0x40,0x40},\n  {0x7F,0x02,0x0C,0x02,0x7F},\n  {0x7F,0x04,0x08,0x10,0x7F},\n  {0x3E,0x41,0x41,0x41,0x3E},\n  {0x7F,0x09,0x09,0x09,0x06},\n  {0x3E,0x41,0x51,0x21,0x5E},\n  {0x7F,0x09,0x19,0x29,0x46},\n  {0x46,0x49,0x49,0x49,0x31},\n  {0x01,0x01,0x7F,0x01,0x01},\n  {0x3F,0x40,0x40,0x40,0x3F},\n  {0x1F,0x20,0x40,0x20,0x1F},\n  {0x3F,0x40,0x38,0x40,0x3F},\n  {0x63,0x14,0x08,0x14,0x63},\n  {0x07,0x08,0x70,0x08,0x07},\n  {0x61,0x51,0x49,0x45,0x43},\n\n  // Chu so 0-9\n  {0x3E,0x45,0x49,0x51,0x3E},\n  {0x00,0x21,0x7F,0x01,0x00},\n  {0x23,0x45,0x49,0x49,0x31},\n  {0x42,0x41,0x49,0x49,0x36},\n  {0x0C,0x14,0x24,0x7F,0x04},\n  {0x72,0x51,0x51,0x51,0x4E},\n  {0x1E,0x29,0x49,0x49,0x06},\n  {0x40,0x47,0x48,0x50,0x60},\n  {0x36,0x49,0x49,0x49,0x36},\n  {0x30,0x49,0x49,0x4A,0x3C},\n\n  // Ky tu dac biet\n  {0x00,0x36,0x36,0x00,0x00},\n  {0x00,0x40,0x40,0x00,0x00},\n  {0x23,0x13,0x08,0x64,0x62}\n};\n\n\n// Tim vi tri ky tu trong bang font\nint fontIndex(char c)\n{\n  if (c >= 'A' && c <= 'Z')\n    return c - 'A' + 1;\n\n  if (c >= '0' && c <= '9')\n    return c - '0' + 27;\n\n  if (c == ':') return 37;\n  if (c == '.') return 38;\n  if (c == '%') return 39;\n\n  return 0;\n}\n\n// Hien thi mot ky tu\nvoid oledChar(char c)\n{\n  int index = fontIndex(c);\n\n  for (byte i = 0; i < 5; i++)\n    oledData(font5x7[index][i]);\n\n  oledData(0x00);\n}\n\n// Hien thi mot dong chu\nvoid oledText(String text, byte page, byte x)\n{\n  oledCommand(0xB0 + page);\n\n  oledCommand(0x00 + (x & 0x0F));\n  oledCommand(0x10 + ((x >> 4) & 0x0F));\n\n  for (unsigned int i = 0; i < text.length(); i++)\n    oledChar(text[i]);\n}\n\n\n// =====================================================\n//                    DOC CAM BIEN DHT11\n// =====================================================\n\nbool readDHT11(float &temperature, float &humidity)\n{\n  byte data[5] = {0, 0, 0, 0, 0};\n\n  pinMode(DHT_PIN, OUTPUT);\n\n  digitalWrite(DHT_PIN, LOW);\n  delay(20);\n\n  digitalWrite(DHT_PIN, HIGH);\n  delayMicroseconds(40);\n\n  pinMode(DHT_PIN, INPUT_PULLUP);\n\n  unsigned long startTime;\n\n  startTime = micros();\n  while (digitalRead(DHT_PIN) == HIGH)\n  {\n    if (micros() - startTime > 100)\n      return false;\n  }\n\n  startTime = micros();\n  while (digitalRead(DHT_PIN) == LOW)\n  {\n    if (micros() - startTime > 100)\n      return false;\n  }\n\n  startTime = micros();\n  while (digitalRead(DHT_PIN) == HIGH)\n  {\n    if (micros() - startTime > 100)\n      return false;\n  }\n\n  // Doc 40 bit du lieu\n  for (byte i = 0; i < 40; i++)\n  {\n    startTime = micros();\n\n    while (digitalRead(DHT_PIN) == LOW)\n    {\n      if (micros() - startTime > 100)\n        return false;\n    }\n\n    unsigned long highStart = micros();\n\n    while (digitalRead(DHT_PIN) == HIGH)\n    {\n      if (micros() - highStart > 100)\n        return false;\n    }\n\n    unsigned long highTime = micros() - highStart;\n\n    if (highTime > 40)\n    {\n      data[i / 8] |= (1 << (7 - (i % 8)));\n    }\n  }\n\n  // Kiem tra du lieu\n  byte checksum = data[0] + data[1] + data[2] + data[3];\n\n  if (checksum != data[4])\n    return false;\n\n  humidity = data[0];\n  temperature = data[2];\n\n  return true;\n}\n\n\n// =====================================================\n//                    DOC CAC CAM BIEN\n// =====================================================\n\nvoid docCamBien()\n{\n  // Doc cam bien do am dat\n  soilRaw = analogRead(SOIL_PIN);\n\n  doAmDat = map(soilRaw, 850, 300, 0, 100);\n  doAmDat = constrain(doAmDat, 0, 100);\n\n  // Doc cam bien mua\n  rain = digitalRead(RAIN_PIN);\n\n  // Doc cam bien nhiet do va do am khong khi\n  float t;\n  float h;\n\n  dhtOK = readDHT11(t, h);\n\n  if (dhtOK)\n  {\n    nhietDo = t;\n    doAmKK = h;\n  }\n}\n\n\n// =====================================================\n//                    DIEU KHIEN BOM VA SERVO\n// =====================================================\n\nvoid dieuKhien()\n{\n  // Dat kho: bat bom\n  if (doAmDat < 60)\n    digitalWrite(BOM_PIN, HIGH);\n  else\n    digitalWrite(BOM_PIN, LOW);\n\n  // Co mua va dat du am: servo quay 90 do\n  if (rain && doAmDat > 60)\n  {\n    servoSet(160);\n  }\n  else\n  {\n    servoSet(0);\n  }\n}\n\n\n// =====================================================\n//                    DIEU KHIEN SERVO\n// =====================================================\n\nvoid servoPulse(int angle)\n{\n  int pulseWidth = map(angle, 0, 180, 1000, 2000);\n\n  digitalWrite(SERVO_PIN, HIGH);\n  delayMicroseconds(pulseWidth);\n\n  digitalWrite(SERVO_PIN, LOW);\n\n  delay(18);\n}\n\nvoid servoSet(int angle)\n{\n  for (byte i = 0; i < 5; i++)\n  {\n    servoPulse(angle);\n  }\n}\n\n\n// =====================================================\n//                    HIEN THI OLED\n// =====================================================\n\nvoid oledHienThi()\n{\n  oledClear();\n\n  // Dong 1: Do am dat\n  oledText(\"DO AM DAT : \", 0, 0);\n  oledText(String(doAmDat) + \"%\", 0, 78);\n\n  // Dong 2: Nhiet do\n  oledText(\"NHIET DO  : \", 1, 0);\n\n  if (dhtOK)\n  {\n    oledText(String((int)nhietDo) + \"C\", 1, 78);\n  }\n  else\n  {\n    oledText(\"LOI\", 1, 78);\n  }\n\n  // Dong 3: Trang thai he thong\n  bool bomChay = (doAmDat < 60);\n  bool keoRem = (rain && doAmDat > 60);\n\n  if (bomChay && keoRem)\n  {\n    oledText(\"TT: BOM + KEO REM\", 2, 0);\n  }\n  else if (bomChay)\n  {\n    oledText(\"TT: BOM DANG CHAY\", 2, 0);\n  }\n  else if (keoRem)\n  {\n    oledText(\"TT: KEO REM CHE\", 2, 0);\n  }\n  else\n  {\n    oledText(\"TRANG THAI: ON DINH\", 2, 0);\n  }\n}\n\n\n// =====================================================\n//                    HIEN THI SERIAL MONITOR\n// =====================================================\n\nvoid hienThiSerial()\n{\n  Serial.println(\"================================\");\n  Serial.println(\"       SMART GREENHOUSE\");\n  Serial.println(\"================================\");\n\n  // Hien thi do am dat\n  Serial.print(\"Do am dat: \");\n  Serial.print(doAmDat);\n  Serial.println(\"%\");\n\n  // Hien thi nhiet do va do am khong khi\n  if (dhtOK)\n  {\n    Serial.print(\"Nhiet do: \");\n    Serial.print(nhietDo);\n    Serial.println(\" C\");\n\n    Serial.print(\"Do am khong khi: \");\n    Serial.print(doAmKK);\n    Serial.println(\" %\");\n  }\n  else\n  {\n    Serial.println(\"DHT11: LOI DOC CAM BIEN\");\n  }\n\n  // Hien thi trang thai mua\n  Serial.print(\"Cam bien mua: \");\n  Serial.println(rain ? \"CO MUA\" : \"KHONG MUA\");\n\n  // Hien thi trang thai bom\n  Serial.print(\"May bom: \");\n  Serial.println(doAmDat < 60 ? \"DANG CHAY\" : \"DANG TAT\");\n\n  // Hien thi goc servo\n  Serial.print(\"Servo: \");\n  Serial.println((rain && doAmDat > 60) ? \"90 DO\" : \"0 DO\");\n\n  Serial.println(\"================================\");\n  Serial.println();\n}\n\n\n// =====================================================\n//                    KHOI TAO HE THONG\n// =====================================================\n\nvoid setup()\n{\n  // Cau hinh chan\n  pinMode(SERVO_PIN, OUTPUT);\n  pinMode(BOM_PIN, OUTPUT);\n\n  pinMode(RAIN_PIN, INPUT);\n  pinMode(SOIL_PIN, INPUT);\n  pinMode(DHT_PIN, INPUT_PULLUP);\n\n  // Tat cac thiet bi ban dau\n  digitalWrite(SERVO_PIN, LOW);\n  digitalWrite(BOM_PIN, LOW);\n\n  // Khoi dong Serial Monitor\n  Serial.begin(9600);\n  delay(500);\n\n  Serial.println(\"KHOI DONG HE THONG...\");\n\n  // Khoi dong OLED\n  Wire.begin();\n\n  oledInit();\n  oledClear();\n\n  oledText(\"SMART GREENHOUSE\", 0, 0);\n  oledText(\"READY!\", 2, 0);\n\n  Serial.println(\"HE THONG SAN SANG!\");\n\n  delay(1000);\n}\n\n\n// =====================================================\n//                    CHUONG TRINH CHINH\n// =====================================================\n\nvoid loop()\n{\n  // Buoc 1: Doc cam bien\n  docCamBien();\n\n  // Buoc 2: Dieu khien thiet bi\n  dieuKhien();\n\n  // Buoc 3: Hien thi OLED\n  oledHienThi();\n\n  // Buoc 4: Hien thi Serial Monitor\n  hienThiSerial();\n\n  // Cho 1.5 giay truoc lan cap nhat tiep theo\n  delay(1500);\n}\n",
+    "hexFileName": "sketch_nov13b.ino.hex",
+    "hexContent": ":100000000C9462000C948A000C948A000C948A0070\n:100010000C948A000C948A000C948A000C948A0038\n:100020000C948A000C948A000C948A000C948A0028\n:100030000C948A000C948A000C948A000C948A0018\n:100040000C94AE070C948A000C941E080C94F807CC\n:100050000C948A000C948A000C948A000C948A00F8\n:100060000C9450080C948A00000000002400270023\n:100070002A0000000000250028002B0000000000DE\n:1000800023002600290004040404040404040202DA\n:100090000202020203030303030301020408102007\n:1000A0004080010204081020010204081020000012\n:1000B0000008000201000003040700000000000027\n:1000C00000006F0911241FBECFEFD8E0DEBFCDBF07\n:1000D00013E0A0E0B1E0EAEAF5E202C005900D927B\n:1000E000A634B107D9F724E0A6E4B3E001C01D921D\n:1000F000A33CB207E1F710E0C2E6D0E004C02197CC\n:10010000FE010E94DB10C136D107C9F70E94A80981\n:100110000C94D3120C940000833081F028F48130C9\n:1001200099F08230A9F008958730A9F08830C9F09D\n:100130008430B1F4809180008F7D03C08091800075\n:100140008F7780938000089584B58F7784BD08955C\n:1001500084B58F7DFBCF8091B0008F778093B00006\n:1001600008958091B0008F7DF9CFCF93DF93282F32\n:1001700030E0F901E255FF4F8491F901E656FF4F57\n:10018000D491F901EA57FF4FC491CC23A1F081111A\n:100190000E948C00EC2FF0E0EE0FFF1FE458FF4FA1\n:1001A000A591B491EC91ED2381E090E009F480E019\n:1001B000DF91CF91089580E090E0FACF1F93CF9325\n:1001C000DF93282F30E0F901E255FF4F8491F901C8\n:1001D000E656FF4FD491F901EA57FF4FC491CC2363\n:1001E000A9F0162F81110E948C00EC2FF0E0EE0F89\n:1001F000FF1FEE58FF4FA591B4918FB7F894EC9183\n:10020000111108C0D095DE23DC938FBFDF91CF9111\n:100210001F910895DE2BF8CFCF93DF9390E0FC0180\n:10022000E656FF4F24918A579F4FFC018491882303\n:10023000C9F090E0880F991FFC01E859FF4FA59184\n:10024000B491FC01EE58FF4FC591D49161110DC0DE\n:100250009FB7F8948C91209582238C9388812823D2\n:1002600028839FBFDF91CF910895623051F49FB7EB\n:10027000F8943C91822F809583238C93E8812E2BD8\n:10028000EFCF8FB7F894EC912E2B2C938FBFEACF42\n:100290003FB7F8948091C2039091C303A091C40327\n:1002A000B091C50326B5A89B05C02F3F19F0019654\n:1002B000A11DB11D3FBFBA2FA92F982F8827BC01C0\n:1002C000CD01620F711D811D911D42E0660F771FE8\n:1002D000881F991F4A95D1F708958F929F92AF92E8\n:1002E000BF92CF92DF92EF92FF924B015C010E948E\n:1002F00048016B017C010E9448016C197D098E093F\n:100300009F09683E734081059105A8F321E0821A98\n:100310009108A108B10888EEC80E83E0D81EE11C40\n:10032000F11C81149104A104B10429F7FF90EF900E\n:10033000DF90CF90BF90AF909F908F9008950895D9\n:100340000895AF92BF92CF92DF92EF92FF920F93F8\n:100350001F93CF93DF936C017B018B01040F151F5B\n:10036000EB015E01AE18BF08C017D10759F06991C3\n:10037000D601ED91FC910190F081E02DC601099527\n:10038000892B79F7C501DF91CF911F910F91FF90D4\n:10039000EF90DF90CF90BF90AF900895FC01538D08\n:1003A000448D252F30E0842F90E0821B930B54174F\n:1003B00010F0CF96089501970895FC01918D828DDC\n:1003C000981761F0A28DAE0FBF2FB11D5D968C9175\n:1003D000928D9F5F9F73928F90E008958FEF9FEFB4\n:1003E0000895FC01918D828D981731F0828DE80F70\n:1003F000F11D858D90E008958FEF9FEF0895FC012A\n:10040000918D228D892F90E0805C9F4F821B9109F6\n:100410008F739927089586E194E00E94FF0121E0FF\n:10042000892B09F420E0822F089580E090E0892B49\n:1004300029F00E940B0281110C9400000895FC0128\n:10044000A48DA80FB92FB11DA35ABF4F2C91848D35\n:1004500090E001968F739927848FA689B7892C9392\n:10046000A089B1898C91837080648C93938D848DE5\n:10047000981306C00288F389E02D80818F7D8083E8\n:100480000895EF92FF920F931F93CF93DF93EC01A8\n:1004900081E0888F9B8D8C8D98131AC0E889F9892B\n:1004A000808185FF15C09FB7F894EE89FF8960832E\n:1004B000E889F98980818370806480839FBF81E0AF\n:1004C00090E0DF91CF911F910F91FF90EF900895F1\n:1004D000F62E0B8D10E00F5F1F4F0F731127E02ECC\n:1004E0008C8D8E110CC00FB607FCFACFE889F98904\n:1004F000808185FFF5CFCE010E941F02F1CFEB8DE9\n:10050000EC0FFD2FF11DE35AFF4FF0829FB7F894D7\n:100510000B8FEA89FB8980818062CFCFCF93DF93F5\n:10052000EC01888D8823B9F0AA89BB89E889F9890B\n:100530008C9185FD03C0808186FD0DC00FB607FC40\n:10054000F7CF8C9185FFF2CF808185FFEDCFCE0173\n:100550000E941F02E9CFDF91CF9108952091880377\n:10056000260F3327331F21323105ECF42091EC03A1\n:10057000FC0190E080E0243069F082E00895A091D1\n:1005800088032191AC0148595C4FA40FB52FB11DD0\n:100590002C930196861798F380918803680F6093D7\n:1005A000880380E0089581E008951092EC0381E0D3\n:1005B0008093EB031092C60361E082E10E94DE00AB\n:1005C00061E083E10E94DE00E9EBF0E080818E7F54\n:1005D000808380818D7F808388E48093B80085E468\n:1005E0008093BC000895CF93DF9391E090936703CD\n:1005F0008823B9F0C091B800D091BA008091BC00B6\n:100600008A7B8093BC0060E082E10E94DE0060E0B3\n:1006100083E10E94DE000E94D502D093BA00C0930D\n:10062000B800DF91CF910895CF92DF92EF92FF92C1\n:100630000F931F93CF93DF93D091150481E0D132B4\n:1006400008F09CC0C09114040E9448016B017C0119\n:100650008091EC0381116CC082E08093EC0381E017\n:100660008093EB038FEF8093EA031092E903D0931A\n:10067000E803A4EFB3E0E8ECF3E080E0D8138DC02A\n:100680001092C7038091C703CC0FC82BC093C70338\n:100690008091C603813009F084C01092C6030E9485\n:1006A00048016B017C018091C7038093BB0080915E\n:1006B000EE039091EF03A091F003B091F103892B29\n:1006C0008A2B8B2BA1F00E9448010091EE03109120\n:1006D000EF032091F0033091F1036C197D098E092D\n:1006E0009F09061717072807390708F442C08091A9\n:1006F000BC0083FDD8CF85EC8093BC000E944801EC\n:100700006B017C018091EC03823009F44CC0809134\n:10071000EA038F3F09F469C08091EA03803209F44B\n:1007200066C08091EA03803309F463C084E026C088\n:100730008091EE039091EF03A091F003B091F1034B\n:10074000892B8A2B8B2B09F483CF0E9448010091BF\n:10075000EE031091EF032091F0033091F1036C1937\n:100760007D098E099F09061717072807390708F022\n:100770006FCF8091ED030E94F30285E01092F303A6\n:10078000109215041092F203DF91CF911F910F91F7\n:10079000FF90EF90DF90CF9008959D9191938F5FA0\n:1007A0006DCF85EEA9CF8091EE039091EF03A091DC\n:1007B000F003B091F103892B8A2B8B2B09F4A2CF84\n:1007C0000E9448010091EE031091EF032091F00385\n:1007D0003091F1036C197D098E099F0906171707DF\n:1007E0002807390708F08ECFC4CF80E0C7CF82E05A\n:1007F000C5CF83E0C3CF0895E091B0038091AF03EC\n:10080000E81730F4F0E0E95BFC4F808190E0089558\n:100810008FEF9FEF08959091B0038091AF032FEF7A\n:100820003FEF981748F4E92FF0E0E95BFC4F208197\n:1008300030E09F5F9093B003C90108958091AF03AA\n:100840009091B003891B990B0895CF92DF92EF929C\n:10085000FF920F931F93CF93DF937C01CB018A010B\n:100860002091F203222389F0EB016B01C40ED51E07\n:10087000CC15DD0569F06991D701ED91FC910190EE\n:10088000F081E02DC7010995F3CF642F0E94AE02DD\n:10089000C801DF91CF911F910F91FF90EF90DF90F2\n:1008A000CF900895CF93DF931F92CDB7DEB76983C2\n:1008B0002091F2032223F9F020911504203258F000\n:1008C00021E030E0FC013383228390E080E00F9050\n:1008D000DF91CF9108958091F303E82FF0E0EC5081\n:1008E000FC4F998190838F5F8093F303809315046D\n:1008F00081E090E0ECCF61E0CE0101960E94AE0273\n:10090000F7CF90E080E00895CF93DF93EC0161E0B2\n:1009100086E00E94DE0028EE33E0DE010E94D41063\n:1009200024EB30E040E050E00E94230F28513C4F80\n:100930004F4F5F4F220F331F220F331F25503109B6\n:10094000C9010197F1F760E086E00E94DE0062E1F4\n:1009500070E080E090E0DF91CF910C946D01CF9337\n:10096000C82F81E08093F2038CE3809314041092EB\n:10097000F3031092150460E483EB94E00E945204A8\n:100980006C2F83EB94E00E945204CF910C941403DB\n:10099000CF93C82F81E08093F2038CE380931404FB\n:1009A0001092F3031092150460E083EB94E00E9430\n:1009B00052046C2F83EB94E00E945204CF910C946C\n:1009C0001403AF92BF92DF92EF92FF920F931F93A7\n:1009D000CF93DF938C01C42F80EB860F0E94C80455\n:1009E0008C2F8F700E94C8048C2F82958F70805F2F\n:1009F0000E94C804D0E0C0E085E0D82ED80114964B\n:100A00008D919C911597C817D90708F04BC0ED91AF\n:100A1000FC91309749F510924603E6E4F3E08081BB\n:100A20009FEB980F9A3118F5082E000C990B805403\n:100A30009109D89E5001D99EB00C1124F12CE12CC3\n:100A4000F501EE0DFF1DEA5FFE4F80810E94AF04AD\n:100A5000BFEFEB1AFB0AE5E0EE16F10489F780E040\n:100A60000E94AF042196CACFEC0FFD1FD8CF90EDA6\n:100A7000980F9A3028F4082E000C990B4597D9CF7F\n:100A80008A3339F08E3241F0853249F090E080E0CF\n:100A9000D0CF85E290E0CDCF86E290E0CACF87E26A\n:100AA00090E0C7CFDF91CF911F910F91FF90EF9012\n:100AB000DF90BF90AF900895CF93DF93C0EB8C2F62\n:100AC0000E94C80480E00E94C80480E10E94C8041B\n:100AD000D0E080E00E94AF04DF5FD038D1F7CF5F75\n:100AE000C43B69F7DF91CF910895FC01019000208C\n:100AF000E9F73197AF01481B590BBC0186E194E03F\n:100B00000C94A1018F929F92AF92BF920F931F936B\n:100B1000CF93DF93CDB7DEB7A1970FB6F894DEBFC2\n:100B20000FBECDBF19A2423008F44AE08E010F5D1E\n:100B30001F4F842E912CB12CA12CA50194010E9451\n:100B4000840FE62FB901CA01EA30F4F4E05DD80160\n:100B5000EE938D01232B242B252B79F790E080E059\n:100B6000109719F0CD010E947505A1960FB6F89463\n:100B7000DEBF0FBECDBFDF91CF911F910F91BF9010\n:100B8000AF909F908F900895E95CE1CFCF93DF9372\n:100B90000E947505EC0182EF91E00E9475058C0FB3\n:100BA0009D1FDF91CF9108954F925F926F927F9238\n:100BB0008F929F92AF92BF92CF92DF92EF92FF926D\n:100BC0000F931F93CF936B017C01742EAC019B019B\n:100BD0000E94CF10882399F085EF91E0CF911F916B\n:100BE0000F91FF90EF90DF90CF90BF90AF909F90CC\n:100BF0008F907F906F905F904F900C947505460199\n:100C00005701E894B7F82FEF3FEF4FE75FE7C501D3\n:100C1000B4010E94CF1081110DC02FEF3FEF4FE7BD\n:100C20005FE7C501B4010E94FF0D18161CF489EF9F\n:100C300091E0D4CF2FEF3FEF4FE75FE4C701B6015C\n:100C40000E94CA1018161CF48DEF91E0C7CF2FEF49\n:100C50003FEF4FE75FECC701B6010E94FF0D87FD34\n:100C6000F3CF20E030E0A901C701B6010E94FF0DDB\n:100C700010E000E087FF0AC06DE286E194E00E9488\n:100C800041028C01F7FAF094F7F8F094C0E060E0CC\n:100C900070E080E09FE37C1641F020E030E040E22D\n:100CA00051E40E942210CF5FF6CFA70196010E9467\n:100CB000B60F2B013C010E949B104B015C014AE0E6\n:100CC0000E9482057C01E00EF11ECC23C1F1C5011A\n:100CD000B4010E94040E9B01AC01C301B2010E9449\n:100CE000B50F4B015C016EE286E194E00E94410287\n:100CF000E80EF91EC15018F120E030E040E251E466\n:100D0000C501B4010E94650E2B013C010E949B109D\n:100D10004B01B12CA12C4AE0C501B4010E9482050F\n:100D2000E80EF91EC501B4010E94040E9B01AC013E\n:100D3000C301B2010E94B50F4B015C01DBCFC701BB\n:100D4000CF911F910F91FF90EF90DF90CF90BF90C8\n:100D5000AF909F908F907F906F905F904F9008958D\n:100D60000F931F93CF93DF93EC01888199810097B4\n:100D700059F02A813B812617370730F081E0DF9157\n:100D8000CF911F910F9108958B016F5F7F4F0E944C\n:100D90000612009759F0998388831B830A832C815C\n:100DA0003D81232B59F7FC011082E8CF80E0E7CF8B\n:100DB000CF93DF93EC0188819981009711F00E9415\n:100DC0007D11198218821D821C821B821A82DF917A\n:100DD000CF910895EF92FF920F931F93CF93DF93DC\n:100DE000EC017B018A01BA010E94B00681110BC09F\n:100DF000CE010E94D806CE01DF91CF911F910F91B5\n:100E0000FF90EF9008951D830C83B701888199812D\n:100E10000E94CC12F0CFEF92FF920F931F93CF93CB\n:100E2000DF93CDB7DEB762970FB6F894DEBF0FBE83\n:100E3000CDBF8C01CB01F801118210821382128286\n:100E4000158214824AE09E012F5F3F4F7901B9015C\n:100E50000E94CA0DF70101900020E9F73197AF0118\n:100E60004E195F09B701C8010E94EA0662960FB6E3\n:100E7000F894DEBF0FBECDBFDF91CF911F910F91D0\n:100E8000FF90EF900895FB01DC0111961C921E92D9\n:100E900013961C921E92129715961C921E921497EE\n:100EA0008617970749F0608171816115710521F0FE\n:100EB000448155810C94EA060895FC011182108248\n:100EC0001382128215821482FB0101900020E9F73F\n:100ED0003197AF01461B570B0C94EA06FC01808149\n:100EE0009181009711F00C947D11089585ED809308\n:100EF000BC008091EE039091EF03A091F003B091BC\n:100F0000F1030796A11DB11D23E0B695A79597950E\n:100F100087952A95D1F72091BC0024FD03C010923B\n:100F2000EC0308954091EE035091EF036091F003BC\n:100F30007091F103452B462B472B69F30097A105D0\n:100F4000B10541F02AE22A95F1F700C00197A10905\n:100F5000B109E1CF8091ED030C94F3021F920F923F\n:100F60000FB60F9211242F933F938F939F93AF93BC\n:100F7000BF938091BE039091BF03A091C003B09135\n:100F8000C1033091BD0323E0230F2D3758F501969F\n:100F9000A11DB11D2093BD038093BE039093BF0399\n:100FA000A093C003B093C1038091C2039091C30387\n:100FB000A091C403B091C5030196A11DB11D8093FA\n:100FC000C2039093C303A093C403B093C503BF911E\n:100FD000AF919F918F913F912F910F900FBE0F90E6\n:100FE0001F90189526E8230F0296A11DB11DD2CFA0\n:100FF0001F920F920FB60F9211242F933F934F938E\n:101000005F936F937F938F939F93AF93BF93EF9370\n:10101000FF9386E194E00E941F02FF91EF91BF9140\n:10102000AF919F918F917F916F915F914F913F9180\n:101030002F910F900FBE0F901F9018951F920F9237\n:101040000FB60F9211242F938F939F93EF93FF93DB\n:10105000E0912604F09127048081E0912C04F09126\n:101060002D0482FD1BC0908180912F048F5F8F73B0\n:1010700020913004821741F0E0912F04F0E0EA5E05\n:10108000FB4F958F80932F04FF91EF919F918F914C\n:101090002F910F900FBE0F901F9018958081F4CF65\n:1010A0001F920F920FB60F9211242F933F934F93DD\n:1010B0005F936F937F938F939F93AF93BF93EF93C0\n:1010C000FF938091B900887F803609F44AC0F0F51B\n:1010D000883209F4A7C018F5803109F49BC0B8F430\n:1010E000882309F4F9C0883009F494C0FF91EF9186\n:1010F000BF91AF919F918F917F916F915F914F9130\n:101100003F912F910F900FBE0F901F90189588312F\n:1011100009F488C0803251F78093EA0314C0803408\n:1011200009F49DC040F48033B9F38833F9F6809315\n:10113000EA0385ECB0C0803509F485C0883509F430\n:1011400096C0883499F60E947607D0CF883909F482\n:101150008CC038F5883729F050F4883611F0803784\n:1011600029F683E08093EC031092AA0357C08838D5\n:1011700009F47BC0803919F0803809F0B7CF80912D\n:10118000AA03803208F071C0E091AA0381E08E0FBB\n:101190008093AA038091BB00F0E0E657FC4F808368\n:1011A0003DC0803B39F0E0F4803A09F479C0883AD8\n:1011B00009F09CCF84E08093EC0310928903109295\n:1011C0008803E091AD03F091AE0309958091880307\n:1011D00081110FC081E0809388031092680309C0D9\n:1011E000803C09F4A6CF883C09F4A3CF883B09F0E2\n:1011F0007DCFE091890381E08E0F80938903F0E039\n:10120000E859FC4F80818093BB00909189038091C5\n:10121000880329C08091C7038093BB0085EC80932D\n:10122000BC0064CF9091E9038091E803981758F5CA\n:10123000E091E90381E08E0F8093E903F0E0E85349\n:10124000FC4F8081E9CFE091E90381E08E0F80932C\n:10125000E9038091BB00F0E0E853FC4F808390915C\n:10126000E9038091E8039817C8F285E8D8CFE091A8\n:10127000E90381E08E0F8093E9038091BB00F0E0E9\n:10128000E853FC4F80838091EB0381115CCF81E0B8\n:101290008093C60384EA8093BC001092EC0326CFAF\n:1012A00085EC8093BC001092EC038091AA038032FD\n:1012B00030F4E091AA03F0E0E657FC4F1082609111\n:1012C000AA0370E0E091AB03F091AC038AE893E0ED\n:1012D00009951092AA030ACF1092EA0334CFE6E1EF\n:1012E000F4E01382128288EE93E0A0E0B0E0848301\n:1012F0009583A683B78322ED31E03183208325ECEB\n:1013000030E03587248724EC30E03787268720ECCF\n:1013100030E0318B208B21EC30E0338B228B22ECC0\n:1013200030E0358B248B26EC30E0378B268B118E0A\n:10133000128E138E148EE3EBF4E0138212828483F8\n:101340009583A683B78384EE91E09183808308958B\n:10135000CF93DF93CDB7DEB767970FB6F894DEBFB4\n:101360000FBECDBF789484B5826084BD84B58160A2\n:1013700084BD85B5826085BD85B5816085BD809160\n:101380006E00816080936E001092810080918100D8\n:1013900082608093810080918100816080938100D0\n:1013A000809180008160809380008091B100846092\n:1013B0008093B1008091B00081608093B0008091F3\n:1013C0007A00846080937A0080917A0082608093B2\n:1013D0007A0080917A00816080937A0080917A000F\n:1013E000806880937A001092C10061E086E00E94DC\n:1013F0000C0161E084E00E940C0160E085E00E9445\n:101400000C0160E08EE00E940C0162E08FE00E941F\n:101410000C0160E086E00E94DE0060E084E00E9453\n:10142000DE00E0912604F091270482E08083E091C1\n:101430002204F09123041082E0912404F091250409\n:101440008FEC808310922E04E0912A04F0912B04FB\n:1014500086E08083E0912804F091290480818061F6\n:101460008083E0912804F091290480818860808342\n:10147000E0912804F0912904808180688083E091C4\n:101480002804F091290480818F7D808364EF71E0CE\n:1014900080E090E00E946D0181E292E00E94C6052A\n:1014A0001092B0031092AF031092F3031092150440\n:1014B0000E94D5028FE991E09093AE038093AD0333\n:1014C00080EA91E09093AC038093AB0364E670E014\n:1014D00080E090E00E946D018EEA0E94C80485EDD4\n:1014E0000E94C80480E80E94C80488EA0E94C804D8\n:1014F0008FE10E94C80483ED0E94C80480E00E942E\n:10150000C80480E40E94C8048DE80E94C80484E1F5\n:101510000E94C80480E20E94C80480E00E94C804BF\n:1015200081EA0E94C80488EC0E94C8048AED0E94E7\n:10153000C80482E00E94C80481E80E94C8048FE8C1\n:101540000E94C80489ED0E94C80481EF0E94C8046B\n:101550008BED0E94C80480E40E94C80484EA0E94C3\n:10156000C80486EA0E94C8048FEA0E94C8040E9448\n:101570005C056DEC72E08E010F5F1F4FC8010E9489\n:101580005D0740E060E0C8010E94E104C8010E94DC\n:101590006E0767E372E0C8010E945D0740E062E009\n:1015A000C8010E94E104C8010E946E078EE392E028\n:1015B0000E94C60568EE73E080E090E00E946D0135\n:1015C00080E480937C0080917A00806480937A002C\n:1015D00080917A0086FDFCCF2091780030917900CF\n:1015E000032E000C440B550B225533404109510981\n:1015F000A4E6B0E00E94420F2AED3DEF4FEF5FEF0F\n:101600000E94230F3C8B2B8B622F232F8B899C896D\n:101610008536910514F064E620E0862F922F97FF1F\n:1016200002C090E080E09093BC038093BB0385E010\n:101630000E94B5009E8B8D8B81E0ED89FE89EF2B9A\n:1016400009F480E08093B10385E0F80111928A9556\n:10165000E9F761E08FE00E940C0160E08FE00E94FA\n:10166000DE0064E170E080E090E00E946D0161E0E6\n:101670008FE00E94DE008BE990E00197F1F762E0D5\n:101680008FE00E940C010E9448016B017C018FE0F9\n:101690000E94B500019709F0A6C10E9448016C198B\n:1016A0007D098E099F09653671058105910578F3DD\n:1016B00080E08093BA03882381F04092B603509271\n:1016C000B7036092B8037092B9038092B20390920C\n:1016D000B303A092B403B092B5038B899C8961E0F7\n:1016E000CC970CF060E084E00E94DE00ED89FE897A\n:1016F000EF2B09F412C22B893C892D3331050CF4F0\n:101700000CC280EA90E00E94840480EA90E00E948B\n:10171000840480EA90E00E94840480EA90E00E94C1\n:10172000840480EA90E00E9484040E945C0561E5E4\n:1017300072E0C8010E945D0740E060E0C8010E94BD\n:10174000E104C8010E946E076091BB037091BC0365\n:10175000CE010D960E940B07BE01635F7F4FCE0145\n:1017600007960E944307EB84FC843FEFE31AF30AD9\n:10177000B701CE0107960E94B006882309F4E0C1A4\n:101780002F8138858B859C856BE073E0820F931FDA\n:101790000E94CC12FC86EB86BE01695F7F4FC801B8\n:1017A0000E9443074EE460E0C8010E94E104C801C2\n:1017B0000E946E07CE0107960E946E07CE010D961D\n:1017C0000E946E076EE572E0C8010E945D0740E06E\n:1017D00061E0C8010E94E104C8010E946E07809187\n:1017E000BA03882309F4BEC16091B6037091B703B0\n:1017F0008091B8039091B9030E949410CE010D9688\n:101800000E940B07BE01635F7F4FCE0107960E94C7\n:101810004307EB84FC848FEFE81AF80AB701CE0186\n:1018200007960E94B006811190C1CE0107960E94D2\n:10183000D806BE01695F7F4FC8010E9443074EE48E\n:1018400061E0C8010E94E104C8010E946E07CE0158\n:1018500007960E946E07CE010D960E946E0780913A\n:10186000BB039091BC032091B103222329F065E9C9\n:1018700072E08D33910534F461E872E0CC9714F492\n:101880006FE672E0C8010E945D0740E062E0C801B7\n:101890000E94E104C8010E946E0785EA92E00E945E\n:1018A000C60586EC92E00E94C60585EA92E00E9499\n:1018B000C6058EED92E00E947505C090BB03D090E6\n:1018C000BC030D2C000CEE08FF084AE0C701B6016E\n:1018D000F7FE0DC06DE286E194E00E9441026627AA\n:1018E0007727CB016C197D098E099F094AE00E9478\n:1018F00082058BE093E00E94C6058091BA0388239D\n:1019000009F43CC18AEE92E00E9475056091B6032D\n:101910007091B7038091B8039091B90342E00E949F\n:10192000D40585EF92E00E94C60588EF92E00E9400\n:1019300075056091B2037091B3038091B4039091E7\n:10194000B50342E00E94D4058AE093E00E94C605F8\n:1019500085E293E00E9475058091B103882309F424\n:1019600010C181E092E00E94C60584E393E00E94EA\n:1019700075058091BB039091BC03CC970CF004C11A\n:1019800087E792E00E94C6058EE393E00E9475050A\n:101990008091B103882309F4FAC08091BB03909130\n:1019A000BC03CD970CF4F3C08BE192E00E94C60516\n:1019B00085EA92E00E94C60582EF91E00E947505DB\n:1019C0006CED75E080E090E00E946D0180E090E0B9\n:1019D000892B09F4F5CD0E940B02882309F4F0CD80\n:1019E0000E940000EDCD0E9448016B017C018FE058\n:1019F0000E94B500892B61F40E9448016C197D0991\n:101A00008E099F09653671058105910580F350CED9\n:101A10000E9448016B017C018FE00E94B500019794\n:101A200061F40E9448016C197D098E099F09653691\n:101A300071058105910580F33BCE312C212C2F8A35\n:101A40000E9448016B017C018FE00E94B500892B48\n:101A500061F40E9448016C197D098E099F09653661\n:101A600071058105910580F323CE0E9448016B0129\n:101A70007C018FE00E94B500019761F40E9448014B\n:101A80006C197D098E099F096536710581059105DF\n:101A900080F30ECE0E9448016C197D098E099F09C2\n:101AA0006932710581059105A8F0EF89E695E69503\n:101AB000E695E00FF12FF11DC1018095909587709B\n:101AC000992721E030E001C0220F8A95EAF7808152\n:101AD000822B8083FFEF2F1A3F0A28E2221631045F\n:101AE00009F0ADCF6981FB808A81860F8F0D9C81C3\n:101AF000890F9D818913DCCD70E090E080E00E9429\n:101B0000040E4B015C016F2D70E090E080E00E94BC\n:101B1000040E2B013C0181E0CCCD90E080E00E94DE\n:101B2000840490E080E00E94840490E080E00E94C1\n:101B3000840490E080E00E94840490E080E0F3CD93\n:101B4000CE0107960E94D80627CE2F8138858B8537\n:101B50009C8566EF72E0820F931F0E94CC12FC8678\n:101B6000EB8667CE6BE672E0C8010E945D074EE42B\n:101B700061E0C8010E94E104C8016FCE8DE093E0EE\n:101B8000E5CE88E092E0EFCE82E192E0FBCE8CE100\n:101B900092E00CCFBB274A3031F4992322F4BDE206\n:101BA000909581959F4F0C94D60DBB27FB0155272F\n:101BB000AA27880F991FAA1FA41710F0A41B8395AA\n:101BC0005051B9F7A05DAA3308F0A95DA193009721\n:101BD00079F7B111B1931192CB010C94EF0DDC01A7\n:101BE000FC01672F71917723E1F7329704C07C9154\n:101BF0006D9370836291AE17BF07C8F308950E947A\n:101C0000410E08F481E00895E89409C097FB3EF482\n:101C100090958095709561957F4F8F4F9F4F992339\n:101C2000A9F0F92F96E9BB279395F69587957795B7\n:101C30006795B795F111F8CFFAF4BB0F11F460FF77\n:101C40001BC06F5F7F4F8F4F9F4F16C0882311F0CF\n:101C500096E911C0772321F09EE8872F762F05C0E3\n:101C6000662371F096E8862F70E060E02AF09A957E\n:101C7000660F771F881FDAF7880F9695879597F973\n:101C80000895990F0008550FAA0BE0E8FEEF16160D\n:101C90001706E807F907C0F012161306E407F50760\n:101CA00098F0621B730B840B950B39F40A2661F0D4\n:101CB000232B242B252B21F408950A2609F4A14077\n:101CC000A6958FEF811D811D08950E94780E0C94BA\n:101CD000E90E0E94DB0E38F00E94E20E20F0952300\n:101CE00011F00C94D20E0C94D80E11240C941D0FEC\n:101CF0000E94FA0E70F3959FC1F3950F50E0551FA7\n:101D0000629FF001729FBB27F00DB11D639FAA2750\n:101D1000F00DB11DAA1F649F6627B00DA11D661F9F\n:101D2000829F2227B00DA11D621F739FB00DA11DC0\n:101D3000621F839FA00D611D221F749F3327A00D7A\n:101D4000611D231F849F600D211D822F762F6A2F16\n:101D500011249F5750409AF0F1F088234AF0EE0F7B\n:101D6000FF1FBB1F661F771F881F91505040A9F7A8\n:101D70009E3F510580F00C94D20E0C941D0F5F3FD6\n:101D8000E4F3983ED4F3869577956795B795F795E4\n:101D9000E7959F5FC1F7FE2B880F911D969587955C\n:101DA00097F9089597F99F6780E870E060E00895DB\n:101DB0009FEF80EC089500240A9416161706180663\n:101DC0000906089500240A9412161306140605063F\n:101DD0000895092E0394000C11F4882352F0BB0FD0\n:101DE00040F4BF2B11F460FF04C06F5F7F4F8F4F33\n:101DF0009F4F089557FD9058440F551F59F05F3F6E\n:101E000071F04795880F97FB991F61F09F3F79F01C\n:101E100087950895121613061406551FF2CF46959E\n:101E2000F1DF08C0161617061806991FF1CF869520\n:101E30007105610508940895E894BB276627772704\n:101E4000CB0197F90895052E97FB1EF400940E948C\n:101E50003A0F57FD07D00E94840F07FC03D04EF4C1\n:101E60000C943A0F50954095309521953F4F4F4F28\n:101E70005F4F089590958095709561957F4F8F4F36\n:101E80009F4F08950E94A60FA59F900DB49F900D9F\n:101E9000A49F800D911D112408952F923F924F927F\n:101EA0005F926F927F928F929F92AF92BF92CF92EA\n:101EB000DF92EF92FF920F931F93CF93DF93CDB7F3\n:101EC000DEB7CA1BDB0B0FB6F894DEBF0FBECDBF6B\n:101ED00009942A88398848885F846E847D848C843C\n:101EE0009B84AA84B984C884DF80EE80FD800C8145\n:101EF0001B81AA81B981CE0FD11D0FB6F894DEBF28\n:101F00000FBECDBFED010895A1E21A2EAA1BBB1B87\n:101F1000FD010DC0AA1FBB1FEE1FFF1FA217B307B5\n:101F2000E407F50720F0A21BB30BE40BF50B661FCB\n:101F3000771F881F991F1A9469F76095709580958F\n:101F400090959B01AC01BD01CF010895A29FB00106\n:101F5000B39FC001A39F700D811D1124911DB29FDD\n:101F6000700D811D1124911D08955058BB27AA277B\n:101F70000E94CD0F0C94E90E0E94DB0E38F00E94F7\n:101F8000E20E20F039F49F3F19F426F40C94D80E99\n:101F90000EF4E095E7FB0C94D20EE92F0E94FA0EA6\n:101FA00058F3BA17620773078407950720F079F48E\n:101FB000A6F50C941C0F0EF4E0950B2EBA2FA02D55\n:101FC0000B01B90190010C01CA01A0011124FF27E6\n:101FD000591B99F0593F50F4503E68F11A16F040E1\n:101FE000A22F232F342F4427585FF3CF46953795E0\n:101FF0002795A795F0405395C9F77EF41F16BA0BA5\n:10200000620B730B840BBAF09150A1F0FF0FBB1F52\n:10201000661F771F881FC2F70EC0BA0F621F731F9B\n:10202000841F48F4879577956795B795F7959E3FF8\n:1020300008F0B0CF9395880F08F09927EE0F979589\n:10204000879508950E9436100C94E90E0E94E20EC6\n:1020500058F00E94DB0E40F029F45F3F29F00C9409\n:10206000D20E51110C941D0F0C94D80E0E94FA0E32\n:1020700068F39923B1F3552391F3951B550BBB27B7\n:10208000AA2762177307840738F09F5F5F4F220FFC\n:10209000331F441FAA1FA9F335D00E2E3AF0E0E8F3\n:1020A00032D091505040E695001CCAF72BD0FE2F3D\n:1020B00029D0660F771F881FBB1F261737074807D1\n:1020C000AB07B0E809F0BB0B802DBF01FF27935889\n:1020D0005F4F3AF09E3F510578F00C94D20E0C946D\n:1020E0001D0F5F3FE4F3983ED4F38695779567958F\n:1020F000B795F7959F5FC9F7880F911D96958795BE\n:1021000097F90895E1E0660F771F881FBB1F6217DC\n:1021100073078407BA0720F0621B730B840BBA0B9A\n:10212000EE1F88F7E09508950E949B106894B11106\n:102130000C941D0F08950E94020F88F09F5798F08D\n:10214000B92F9927B751B0F0E1F0660F771F881FBC\n:10215000991F1AF0BA95C9F714C0B13091F00E94D6\n:102160001C0FB1E008950C941C0F672F782F88275F\n:10217000B85F39F0B93FCCF3869577956795B395FD\n:10218000D9F73EF490958095709561957F4F8F4F6C\n:102190009F4F08950E94410E08F48FEF08950E940A\n:1021A000410E880B990B08950E94A60FB7FF089562\n:1021B000821B930B0895EE0FFF1F0590F491E02D05\n:1021C00009940F931F93CF93DF938230910510F4FE\n:1021D00082E090E0E091C104F091C20430E020E0A0\n:1021E000B0E0A0E0309799F42115310509F44AC018\n:1021F000281B390B24303105D8F58A819B81611564\n:10220000710589F1FB0193838283FE0111C0408136\n:1022100051810281138148175907E0F04817590787\n:1022200099F4109761F012960C93129713961C93E1\n:102230003296CF01DF91CF911F910F9108950093B6\n:10224000C1041093C204F4CF2115310551F0421797\n:10225000530738F0A901DB019A01BD01DF01F80144\n:10226000C1CFEF01F9CF9093C2048093C104CDCFC9\n:10227000FE01E20FF31F81939193225031093983BC\n:102280002883D7CF2091BF043091C004232B41F481\n:1022900020910201309103013093C0042093BF04C8\n:1022A00020910001309101012115310541F42DB734\n:1022B0003EB74091040150910501241B350BE0917C\n:1022C000BF04F091C004E217F307A0F42E1B3F0BEC\n:1022D0002817390778F0AC014E5F5F4F2417350798\n:1022E00048F04E0F5F1F5093C0044093BF0481938A\n:1022F00091939FCFF0E0E0E09CCFCF93DF930097E6\n:10230000E9F0FC01329713821282A091C104B091CE\n:10231000C204ED0130E020E01097A1F4208131816A\n:10232000820F931F2091BF043091C00428173907F2\n:1023300009F061C0F093C004E093BF04DF91CF9136\n:102340000895EA01CE17DF07E8F54A815B819E0117\n:1023500041155105B1F7E901FB83EA834991599190\n:10236000C40FD51FEC17FD0761F48081918102969F\n:10237000840F951FE90199838883828193819B83D0\n:102380008A83F0E0E0E012968D919C91139700977C\n:10239000B9F52D913C911197CD010296820F931FB3\n:1023A0002091BF043091C0042817390739F63097BF\n:1023B00051F51092C2041092C104B093C004A093CE\n:1023C000BF04BCCFD383C28340815181840F951F4A\n:1023D000C817D90761F44E5F5F4F88819981480F14\n:1023E000591F518340838A819B8193838283211566\n:1023F000310509F0B0CFF093C204E093C1049ECF41\n:10240000FD01DC01C0CF13821282D7CFB0E0A0E083\n:10241000ECE0F2E10C944F0F8C01009751F4CB01EA\n:102420000E94E1108C01C801CDB7DEB7E0E10C9449\n:102430006B0FFC01E60FF71F9C0122503109E217D8\n:10244000F30708F49DC0D901CD91DC911197C6170F\n:10245000D70798F0C530D10530F3CE010497861721\n:10246000970708F3C61BD70B2297C193D1936D939F\n:102470007C93CF010E947D11D6CF5B01AC1ABD0ABF\n:102480004C018C0E9D1EA091C104B091C204512C30\n:10249000412CF12CE12C109731F58091BF049091E3\n:1024A000C0048815990509F05CC04616570608F067\n:1024B00058C08091000190910101009741F48DB7BF\n:1024C0009EB74091040150910501841B950BE817BC\n:1024D000F90708F055C0F093C004E093BF04F90178\n:1024E00071836083A0CF8D919C91119712966C900F\n:1024F000129713967C901397A815B90559F56C019E\n:1025000042E0C40ED11CCA14DB0420F1AC014A190C\n:102510005B09DA011296159780F06282738251830B\n:102520004083D9016D937C93E114F10471F0D701DC\n:102530001396FC93EE93129776CF22968C0F9D1FE5\n:10254000F90191838083F301EFCFF093C204E0930C\n:10255000C10469CF4816590608F42C017D01D30146\n:102560009ACFCB010E94E1107C01009749F0AE01A7\n:10257000B8010E94C312C8010E947D11870153CF88\n:1025800010E000E050CFFB01DC0102C001900D9291\n:1025900041505040D8F70895FB01DC0101900D92A5\n:0A25A0000020E1F70895F894FFCF42\n:1025AA000000C304800000000000007E1111117EAB\n:1025BA007F494949363E414141227F4141221C7FA0\n:1025CA00494949417F090909013E4149497A7F0838\n:1025DA0008087F00417F41002040413F017F0814E5\n:1025EA0022417F404040407F020C027F7F04081056\n:1025FA007F3E4141413E7F090909063E4151215E24\n:10260A007F09192946464949493101017F01013F9C\n:10261A004040403F1F2040201F3F4038403F631446\n:10262A00081463070870080761514945433E454944\n:10263A00513E00217F010023454949314241494920\n:10264A00360C14247F04725151514E1E29494906F1\n:10265A00404748506036494949363049494A3C0062\n:10266A003636000000404000002313086462000070\n:10267A0000004102A101CE018E02FF01DD01F1013C\n:10268A0000000000520425048104FB031E040B040D\n:10269A00FC030D0A006E616E00696E66006F766655\n:1026AA0000434F204D5541004B484F4E47204D5552\n:1026BA00410044414E472054415400393020444F90\n:1026CA00004B484F4920444F4E4720484520544824\n:1026DA004F4E472E2E2E005245414459210048455F\n:1026EA002054484F4E472053414E2053414E4721D4\n:1026FA0000444F20414D20444154203A20004E4886\n:10270A0049455420444F20203A20004C4F49005458\n:10271A00543A20424F4D2044414E472043484159A4\n:10272A00005452414E4720544841493A204F4E20C6\n:10273A0044494E480054543A204B454F2052454D87\n:10274A0020434845003D3D3D3D3D3D3D3D3D3D3DF0\n:10275A003D3D3D3D3D3D3D3D3D3D3D3D3D3D3D3D9F\n:10276A003D3D3D3D3D0020202020202020534D416D\n:10277A00525420475245454E484F55534500446FE1\n:10278A0020616D206461743A20004E686965742086\n:10279A00646F3A2000204300446F20616D206B680B\n:1027AA006F6E67206B68693A200020250044485400\n:1027BA0031313A204C4F4920444F432043414D2068\n:1027CA004249454E0043616D206269656E206D7510\n:1027DA00613A20004D617920626F6D3A200053659D\n:0627EA0072766F3A200038\n:00000001FF"
+  },
+  {
+    "id": "smart-home-ntm",
+    "name": "Nhà thông minh - Siêu âm & Rèm mưa (ntm.ino)",
+    "description": "Đo khoảng cách bằng cảm biến siêu âm HC-SR04 (D2/D3), đọc quang trở (A2) và cảm biến mưa (D5); tự động bật đèn LED (D4), quay Servo rèm (D6) và Servo cổng/xe (D7).",
+    "board": "uno",
+    "hexPath": "firmware/ntm.ino.hex",
+    "version": "1.0.0",
+    "wiringNote": "HC-SR04: TRIG -> D2, ECHO -> D3 | Đèn LED -> D4 | Cảm biến mưa -> D5 | Servo rèm -> D6 | Servo xe -> D7 | Quang trở -> A2 | Serial Monitor: 9600 baud.",
+    "inoFileName": "ntm.ino",
+    "inoCode": "\n#define CHAN_TRIG       2\n#define CHAN_ECHO       3\n#define CHAN_LED        4\n#define CHAN_MUA        5\n#define CHAN_SERVO_REM  6\n#define CHAN_SERVO_XE   7\n#define CHAN_QUANG_TRO  A2\n\n#define NGUONG_ANH_SANG 10\n#define NGUONG_KHOANG_CACH 20\n\n#define CHU_KY_SERIAL 2000UL\n\nint giaTriAnhSang = 0;\nlong khoangCach = 999;\n\nbool coMua = false;\nbool troiToi = false;\n\nint gocServoRem = 0;\nint gocServoXe = 0;\n\nunsigned long thoiDiemSerial = 0;\n\n// =====================================================\n//              HAM DO KHOANG CACH\n// =====================================================\n\nlong docKhoangCach()\n{\n  digitalWrite(CHAN_TRIG, LOW);\n  delayMicroseconds(2);\n\n  digitalWrite(CHAN_TRIG, HIGH);\n  delayMicroseconds(10);\n  digitalWrite(CHAN_TRIG, LOW);\n\n  unsigned long thoiGian = pulseIn(CHAN_ECHO, HIGH, 30000UL);\n\n  if (thoiGian == 0) {\n    return 999;\n  }\n\n  return thoiGian / 58;\n}\n\n// =====================================================\n//              HAM DOC CAM BIEN\n// =====================================================\n\nvoid docCamBien()\n{\n  long tongAnhSang = 0;\n\n  for (int i = 0; i < 4; i++) {\n    tongAnhSang += analogRead(CHAN_QUANG_TRO);\n  }\n\n  giaTriAnhSang = tongAnhSang / 4;\n\n  // Duoi nguong 500 thi bat LED\n  troiToi = (giaTriAnhSang < NGUONG_ANH_SANG);\n\n  coMua = (digitalRead(CHAN_MUA) == HIGH);\n\n  khoangCach = docKhoangCach();\n}\n\n// =====================================================\n//              HAM DIEU KHIEN HE THONG\n// =====================================================\n\nvoid dieuKhienHeThong()\n{\n  digitalWrite(CHAN_LED, troiToi ? HIGH : LOW);\n\n  // Co mua: servo rem quay 90 do\n  gocServoRem = coMua ? 160 : 0;\n\n  // Khoang cach <= 20cm: servo xe quay 90 do\n  gocServoXe = (khoangCach <= NGUONG_KHOANG_CACH) ? 120 : 0;\n}\n\n// =====================================================\n//              HAM DIEU KHIEN SERVO\n// =====================================================\n\nvoid capNhatServo()\n{\n  int xungRem = map(gocServoRem, 0, 180, 1000, 2000);\n  int xungXe = map(gocServoXe, 0, 180, 1000, 2000);\n\n  // Bat dau xung cho ca hai servo\n  digitalWrite(CHAN_SERVO_REM, HIGH);\n  digitalWrite(CHAN_SERVO_XE, HIGH);\n\n  if (xungRem < xungXe) {\n    delayMicroseconds(xungRem);\n    digitalWrite(CHAN_SERVO_REM, LOW);\n\n    delayMicroseconds(xungXe - xungRem);\n    digitalWrite(CHAN_SERVO_XE, LOW);\n  }\n  else if (xungXe < xungRem) {\n    delayMicroseconds(xungXe);\n    digitalWrite(CHAN_SERVO_XE, LOW);\n\n    delayMicroseconds(xungRem - xungXe);\n    digitalWrite(CHAN_SERVO_REM, LOW);\n  }\n  else {\n    delayMicroseconds(xungRem);\n    digitalWrite(CHAN_SERVO_REM, LOW);\n    digitalWrite(CHAN_SERVO_XE, LOW);\n  }\n}\n\n// =====================================================\n//              HAM HIEN THI SERIAL\n// =====================================================\n\nvoid hienThiSerial()\n{\n  Serial.println();\n  Serial.println(\"================================\");\n  Serial.println(\"       TRANG THAI SMART HOME\");\n  Serial.println(\"================================\");\n\n  Serial.print(\"Anh sang: \");\n  Serial.println(giaTriAnhSang);\n\n  Serial.print(\"Khoang cach: \");\n  Serial.print(khoangCach);\n  Serial.println(\" cm\");\n\n  Serial.print(\"Cam bien mua: \");\n  Serial.println(coMua ? \"CO MUA\" : \"KHONG MUA\");\n\n  Serial.print(\"Den LED: \");\n  Serial.println(troiToi ? \"BAT\" : \"TAT\");\n\n  Serial.print(\"Servo rem: \");\n  Serial.print(gocServoRem);\n  Serial.println(\" do\");\n\n  Serial.print(\"Servo xe: \");\n  Serial.print(gocServoXe);\n  Serial.println(\" do\");\n\n  Serial.println(\"================================\");\n}\n\n// =====================================================\n//              HAM KHOI TAO\n// =====================================================\n\nvoid setup()\n{\n  pinMode(CHAN_TRIG, OUTPUT);\n  pinMode(CHAN_ECHO, INPUT);\n\n  pinMode(CHAN_LED, OUTPUT);\n  pinMode(CHAN_MUA, INPUT);\n\n  pinMode(CHAN_SERVO_REM, OUTPUT);\n  pinMode(CHAN_SERVO_XE, OUTPUT);\n\n  pinMode(CHAN_QUANG_TRO, INPUT);\n\n  digitalWrite(CHAN_TRIG, LOW);\n  digitalWrite(CHAN_LED, LOW);\n  digitalWrite(CHAN_SERVO_REM, LOW);\n  digitalWrite(CHAN_SERVO_XE, LOW);\n\n  Serial.begin(9600);\n  Serial.println(\"HE THONG SMART HOME KHOI DONG!\");\n}\n\n// =====================================================\n//              VONG LAP CHINH\n// =====================================================\n\nvoid loop()\n{\n  docCamBien();\n  dieuKhienHeThong();\n  capNhatServo();\n\n  if (millis() - thoiDiemSerial >= CHU_KY_SERIAL) {\n    thoiDiemSerial = millis();\n    hienThiSerial();\n  }\n}\n",
+    "hexFileName": "ntm.ino.hex",
+    "hexContent": ":100000000C9462000C948A000C948A000C948A0070\n:100010000C948A000C948A000C948A000C948A0038\n:100020000C948A000C948A000C948A000C948A0028\n:100030000C948A000C948A000C948A000C948A0018\n:100040000C94C2020C948A000C9432030C940C039E\n:100050000C948A000C948A000C948A000C948A00F8\n:100060000C948A000C948A000000000023002600F3\n:10007000290000000000240027002A0000000000E2\n:10008000250028002B0004040404040404040202D4\n:100090000202020203030303030301020408102007\n:1000A0004080010204081020010204081020000012\n:1000B0000008000201000003040700000000000027\n:1000C0000000250611241FBECFEFD8E0DEBFCDBF54\n:1000D00011E0A0E0B1E0E2E6FDE002C005900D9283\n:1000E000A03EB107D9F722E0A0EEB1E001C01D9219\n:1000F000A239B207E1F710E0C2E6D0E004C02197D0\n:10010000FE010E94A906C136D107C9F70E94A903C2\n:100110000C94AF060C940000833081F028F48130F9\n:1001200099F08230A9F008958730A9F08830C9F09D\n:100130008430B1F4809180008F7D03C08091800075\n:100140008F7780938000089584B58F7784BD08955C\n:1001500084B58F7DFBCF8091B0008F778093B00006\n:1001600008958091B0008F7DF9CF1F93CF93DF93D7\n:10017000282F30E0F901E255FF4F8491F901E6564E\n:10018000FF4FD491F901EA57FF4FC491CC23A9F056\n:10019000162F81110E948C00EC2FF0E0EE0FFF1F54\n:1001A000E458FF4FA591B4918FB7F894EC911111D9\n:1001B00008C0D095DE23DC938FBFDF91CF911F91D4\n:1001C0000895DE2BF8CFCF93DF9390E0FC01E65645\n:1001D000FF4F24918A579F4FFC0184918823D1F0CF\n:1001E00090E0880F991FFC01EE58FF4FA591B49144\n:1001F000FC01E458FF4FC591D49161110EC09FB727\n:10020000F8948C91E22FE0958E238C932881E22341\n:10021000E8839FBFDF91CF9108958FB7F894EC9159\n:10022000E22BEC938FBFF6CF8230910538F0880F28\n:10023000991F880F991F05970197F1F70895AF92BD\n:10024000BF92CF92DF92EF92FF920F931F93CF93C3\n:10025000DF936C017B018B01040F151FEB015E0125\n:10026000AE18BF08C017D10759F06991D601ED91BA\n:10027000FC910190F081E02DC6010995892B79F759\n:10028000C501DF91CF911F910F91FF90EF90DF900B\n:10029000CF90BF90AF900895FC01538D448D252FD2\n:1002A00030E0842F90E0821B930B541710F0CF9610\n:1002B000089501970895FC01918D828D981761F042\n:1002C000A28DAE0FBF2FB11D5D968C91928D9F5F59\n:1002D0009F73928F90E008958FEF9FEF0895FC0138\n:1002E000918D828D981731F0828DE80FF11D858DEB\n:1002F00090E008958FEF9FEF0895FC01918D228D7E\n:10030000892F90E0805C9F4F821B91098F73992702\n:10031000089585EF91E00E947D0121E0892B09F489\n:1003200020E0822F089580E090E0892B29F00E9440\n:10033000890181110C9400000895FC01A48DA80F7F\n:10034000B92FB11DA35ABF4F2C91848D90E0019617\n:100350008F739927848FA689B7892C93A089B18937\n:100360008C91837080648C93938D848D981306C0D8\n:100370000288F389E02D80818F7D80830895EF923C\n:10038000FF920F931F93CF93DF93EC0181E0888F4F\n:100390009B8D8C8D98131AC0E889F989808185FF1F\n:1003A00015C09FB7F894EE89FF896083E889F989C1\n:1003B00080818370806480839FBF81E090E0DF91C3\n:1003C000CF911F910F91FF90EF900895F62E0B8D16\n:1003D00010E00F5F1F4F0F731127E02E8C8D8E11D1\n:1003E0000CC00FB607FCFACFE889F989808185FF38\n:1003F000F5CFCE010E949D01F1CFEB8DEC0FFD2FCB\n:10040000F11DE35AFF4FF0829FB7F8940B8FEA89F2\n:10041000FB8980818062CFCFCF93DF93EC01888D01\n:100420008823B9F0AA89BB89E889F9898C9185FD6F\n:1004300003C0808186FD0DC00FB607FCF7CF8C91FD\n:1004400085FFF2CF808185FFEDCFCE010E949D0117\n:10045000E9CFDF91CF910895FC0101900020E9F7E9\n:100460003197AF01481B590BBC0185EF91E00C940B\n:100470001F01CF93DF930E942C02EC0186E191E0F3\n:100480000E942C028C0F9D1FDF91CF9108958F92B7\n:100490009F92AF92BF92CF92DF92EF92FF920F9313\n:1004A0001F93CF93DF93CDB7DEB7A1970FB6F89424\n:1004B000DEBF0FBECDBF6B017C01F7FE41C06DE218\n:1004C00085EF91E00E94BF018C0122273327A9010B\n:1004D0002C193D094E095F0919A2CE0181967C01B4\n:1004E0009AE0892E912CA12CB12CCA01B901A50149\n:1004F00094010E947106605DF70162937F012115EE\n:1005000031054105510589F790E080E0309719F0F9\n:10051000CF010E942C02800F911FA1960FB6F89474\n:10052000DEBF0FBECDBFDF91CF911F910F91FF9026\n:10053000EF90DF90CF90BF90AF909F908F900895F5\n:10054000AC019B0119A28E010F5D1F4F8AE0C82EDE\n:10055000D12CE12CF12CCA01B901A70196010E940E\n:100560007106605DF80162938F0121153105410527\n:10057000510589F790E080E0309779F2CF010E9431\n:100580002C02CBCF1F920F920FB60F9211242F93F4\n:100590003F938F939F93AF93BF938091F10190917D\n:1005A000F201A091F301B091F4013091F00123E048\n:1005B000230F2D3758F50196A11DB11D2093F00191\n:1005C0008093F1019093F201A093F301B093F401B1\n:1005D0008091EC019091ED01A091EE01B091EF01BD\n:1005E0000196A11DB11D8093EC019093ED01A093A4\n:1005F000EE01B093EF01BF91AF919F918F913F9129\n:100600002F910F900FBE0F901F90189526E8230F83\n:100610000296A11DB11DD2CF1F920F920FB60F925D\n:1006200011242F933F934F935F936F937F938F93F7\n:100630009F93AF93BF93EF93FF9385EF91E00E9459\n:100640009D01FF91EF91BF91AF919F918F917F910C\n:100650006F915F914F913F912F910F900FBE0F902F\n:100660001F9018951F920F920FB60F9211242F937F\n:100670008F939F93EF93FF93E0910502F091060211\n:100680008081E0910B02F0910C0282FD1BC09081F1\n:1006900080910E028F5F8F7320910F02821741F0BD\n:1006A000E0910E02F0E0EB50FE4F958F80930E022A\n:1006B000FF91EF919F918F912F910F900FBE0F900F\n:1006C0001F9018958081F4CFCF92DF92EF92FF9226\n:1006D0000F931F93E82FF92F05C00150110921092D\n:1006E000310961F1908196239417B9F305C0015047\n:1006F00011092109310911F1908196239413F7CF43\n:10070000C12CD12CE12CF12C0AC08FEFC81AD80AC9\n:10071000E80AF80A0C151D052E053F0579F08081C1\n:100720008623841791F36C2D7D2D8E2D9F2D1F9187\n:100730000F91FF90EF90DF90CF90089560E070E010\n:1007400080E090E01F910F91FF90EF90DF90CF90AD\n:100750000895789484B5826084BD84B5816084BD39\n:1007600085B5826085BD85B5816085BD80916E004F\n:10077000816080936E001092810080918100826080\n:1007800080938100809181008160809381008091BD\n:1007900080008160809380008091B10084608093AC\n:1007A000B1008091B00081608093B00080917A00A8\n:1007B000846080937A0080917A00826080937A00CE\n:1007C00080917A00816080937A0080917A008068BD\n:1007D00080937A001092C10061E082E00E94E30001\n:1007E00060E083E00E94E30061E084E00E94E300B7\n:1007F00060E085E00E94E30061E086E00E94E300A3\n:1008000061E087E00E94E30060E080E10E94E30095\n:1008100060E082E00E94B50060E084E00E94B500E4\n:1008200060E086E00E94B50060E087E00E94B500CD\n:10083000E0910502F091060282E08083E0910102DE\n:10084000F09102021082E0910302F09104028FEC19\n:10085000808310920D02E0910902F0910A0286E075\n:100860008083E0910702F09108028081806180839B\n:10087000E0910702F0910802808188608083E09116\n:100880000702F0910802808180688083E09107026E\n:10089000F091080280818F7D808382E391E00E9445\n:1008A000390244EB442E512C612C712C33E2232E5F\n:1008B000312C44E050E060E070E0CB01E2E4E093F2\n:1008C0007C0020917A00206420937A0020917A00A5\n:1008D00026FDFCCF0091780010917900012E000CCC\n:1008E000220B330B600F711F821F931F4150510960\n:1008F00031F724E030E040E050E00E9452063093AF\n:10090000E7012093E60181E02A3031050CF080E018\n:100910008093E401E3EBF0E08491EFE9F0E0D4911F\n:10092000EBE8F0E0C491CC2379F081110E948C00B7\n:10093000EC2FF0E0EE0FFF1FE859FF4FA591B491A7\n:100940008C91D82381E009F480E081708093E501E7\n:1009500060E082E00E94B50083E090E00197F1F74B\n:1009600061E082E00E94B500C1010197F1F760E00B\n:1009700082E00E94B500EDE9F0E06491E9E8F0E082\n:100980008491E82FF0E0EE0FFF1FE859FF4F8591AB\n:10099000949100E315E720E030E0462F0E946403C5\n:1009A000611571058105910509F475C06F5F7F4F71\n:1009B0008F4F9F4F9F70611571058105910509F457\n:1009C0006AC02AE330E040E050E00E94710669010D\n:1009D0007A01C0920001D0920101E0920201F092EE\n:1009E00003016091E40184E00E94B5008091E5017B\n:1009F000B0E0A0E0882311F0A0EAB0E0B093E301FA\n:100A0000A093E201D0E0C0E0F5E1CF16D104E1040B\n:100A1000F10414F4C8E7D0E0D093E101C093E00101\n:100A200028EE33E00E94A206A30192010E94520622\n:100A300069017A0188EEC80E83E0D81EE11CF11C22\n:100A400028EE33E0DE010E94A206A30192010E947B\n:100A5000520649015A01E8EE8E0EE3E09E1EA11CEB\n:100A6000B11C61E086E00E94B50061E087E00E9471\n:100A7000B500C814D904B4F4C6010E94140160E0A2\n:100A800086E00E94B500C4018C199D090E941401E2\n:100A900060E087E019C087EEC82E83E0D82EE12CF5\n:100AA000F12C97CF8C149D040CF0C1C0C4010E949E\n:100AB000140160E087E00E94B500C6018819990919\n:100AC0000E94140160E086E00E94B5002FB7F89400\n:100AD0008091F1019091F201A091F301B091F401A4\n:100AE0002FBF4091E8015091E9016091EA017091B6\n:100AF000EB01841B950BA60BB70B803D9740A1051E\n:100B0000B10508F487C02FB7F8948091F101909156\n:100B1000F201A091F301B091F4012FBF8093E8019D\n:100B20009093E901A093EA01B093EB0186E191E093\n:100B30000E942C0281E591E00E94390282E791E057\n:100B40000E94390281E591E00E9439028FE891E02C\n:100B50000E942C026091E6017091E701072E000CC3\n:100B6000880B990B0E94470286E191E00E942C02BB\n:100B70008AE991E00E942C026091000170910101CC\n:100B800080910201909103010E94470288EA91E05E\n:100B90000E9439028CEA91E00E942C028091E501CA\n:100BA00081114DC080E291E00E9439028BEB91E00F\n:100BB0000E942C028091E401811144C08EE291E0F8\n:100BC0000E94390285EC91E00E942C026091E201C2\n:100BD0007091E301072E000C880B990B0E944702CD\n:100BE00081ED91E00E94390285ED91E00E942C0296\n:100BF0006091E0017091E101072E000C880B990BC8\n:100C00000E94470281ED91E00E94390281E591E066\n:100C10000E94390280E090E0892B09F44ACE0E94BC\n:100C20008901882309F442CE0E9400003FCEC6010C\n:100C30000E94140160E086E00E94B50029CF89E19E\n:100C400091E0B2CF8AE291E0BBCFE5EFF1E0138211\n:100C5000128288EE93E0A0E0B0E084839583A683BF\n:100C6000B78388E091E09183808385EC90E095875D\n:100C7000848784EC90E09787868780EC90E0918B66\n:100C8000808B81EC90E0938B828B82EC90E0958B53\n:100C9000848B86EC90E0978B868B118E128E138E50\n:100CA000148E0895052E97FB1EF400940E94690689\n:100CB00057FD07D00E94710607FC03D04EF40C9438\n:100CC000690650954095309521953F4F4F4F5F4FA6\n:100CD000089590958095709561957F4F8F4F9F4FA8\n:100CE0000895A1E21A2EAA1BBB1BFD010DC0AA1F6D\n:100CF000BB1FEE1FFF1FA217B307E407F50720F085\n:100D0000A21BB30BE40BF50B661F771F881F991FFF\n:100D10001A9469F760957095809590959B01AC0148\n:100D2000BD01CF010895A29FB001B39FC001A39F51\n:100D3000700D811D1124911DB29F700D811D112414\n:100D4000911D08950E949306B7FF0895821B930B8F\n:100D50000895EE0FFF1F0590F491E02D0994F8948B\n:020D6000FFCFC3\n:100D6200E703000000000000BF011F014C010C025C\n:100D72007D015B016F010D0A00434F204D5541007B\n:100D82004B484F4E47204D5541004241540054417B\n:100D9200540048452054484F4E4720534D41525429\n:100DA20020484F4D45204B484F4920444F4E472144\n:100DB200003D3D3D3D3D3D3D3D3D3D3D3D3D3D3D9E\n:100DC2003D3D3D3D3D3D3D3D3D3D3D3D3D3D3D3D51\n:100DD2003D00202020202020205452414E47205404\n:100DE20048414920534D41525420484F4D450041FE\n:100DF2006E682073616E673A20004B686F616E67A0\n:100E020020636163683A200020636D0043616D20B6\n:100E12006269656E206D75613A200044656E204CF2\n:100E220045443A2000536572766F2072656D3A2010\n:100E32000020646F00536572766F2078653A200057\n:00000001FF"
+  },
+  {
+    id: 'blink',
+    "name": "Nhấp nháy LED (Blink)",
+    "description": "Làm nhấp nháy đèn LED tích hợp sẵn trên chân D13 của Arduino Uno với chu kỳ 1 giây bật / 1 giây tắt để kiểm tra nhanh mạch.",
+    "board": "uno",
+    "hexPath": "firmware/blink.hex",
+    "version": "1.0.0",
+    "wiringNote": "Không cần đấu dây ngoài. Sử dụng trực tiếp đèn LED tích hợp sẵn (LED_BUILTIN) nối với chân D13 trên board Arduino Uno.",
+    "inoFileName": "blink.ino",
+    "inoCode": "// Mẫu thử nghiệm: Nhấp nháy LED chân D13 (Blink)\nvoid setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(1000);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(1000);\n}\n",
+    "hexFileName": "",
+    "hexContent": ""
+  },
+  {
+    id: 'serial-hello',
+    "name": "Chào thế giới qua Serial (Serial Hello)",
+    "description": "Gửi chuỗi thông báo \"Xin chao tu Arduino Uno!\" liên tục mỗi 2 giây qua cổng giao tiếp UART (tốc độ 9600 baud).",
+    "board": "uno",
+    "hexPath": "firmware/serial-hello.hex",
+    "version": "1.1.0",
+    "wiringNote": "Không cần đấu dây ngoài. Lưu ý: Để trống chân D0 (RX) và D1 (TX) trong lúc nạp để không gây xung đột tín hiệu UART với chip nạp USB.",
+    "inoFileName": "serial-hello.ino",
+    "inoCode": "// Mẫu thử nghiệm: Chào thế giới qua Serial (9600 baud)\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  Serial.println(\"Xin chao tu Arduino Uno!\");\n  delay(2000);\n}\n",
+    "hexFileName": "",
+    "hexContent": ""
+  }
+];
+
+    /* ==========================================================================
+       KHỐI 2: TIỆN ÍCH HỆ THỐNG, GIẢI MÃ INTEL HEX & PHÂN LOẠI LỖI TIẾNG VIỆT
+       ========================================================================== */
+
+    function sleepMs(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    // Giải mã chuỗi Intel HEX (.hex) sang mảng nhị phân Uint8Array để kiểm tra & nạp STK500v1
+    function parseIntelHexToBytes(hexText) {
+      const lines = String(hexText || '').split(/\r?\n/);
+      let maxAddr = 0;
+      const records = [];
+      let highAddress = 0;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        if (!line.startsWith(':')) {
+          throw new Error(`Dòng ${i + 1} trong file .hex không bắt đầu bằng dấu ':'.`);
+        }
+        const byteCount = parseInt(line.substr(1, 2), 16);
+        const addr16 = parseInt(line.substr(3, 4), 16);
+        const recordType = parseInt(line.substr(7, 2), 16);
+        const dataHex = line.substr(9, byteCount * 2);
+
+        if (recordType === 0x00) {
+          const absAddr = highAddress + addr16;
+          const bytes = new Uint8Array(byteCount);
+          for (let b = 0; b < byteCount; b++) {
+            bytes[b] = parseInt(dataHex.substr(b * 2, 2), 16);
+          }
+          records.push({ addr: absAddr, bytes: bytes });
+          if (absAddr + byteCount > maxAddr) {
+            maxAddr = absAddr + byteCount;
+          }
+        } else if (recordType === 0x01) {
+          break;
+        } else if (recordType === 0x02) {
+          highAddress = parseInt(dataHex, 16) << 4;
+        } else if (recordType === 0x04) {
+          highAddress = parseInt(dataHex, 16) << 16;
+        }
+      }
+
+      if (maxAddr === 0) {
+        throw new Error('File .hex rỗng (0 byte dữ liệu chương trình).');
+      }
+
+      const output = new Uint8Array(maxAddr);
+      output.fill(0xFF);
+      for (const rec of records) {
+        output.set(rec.bytes, rec.addr);
+      }
+      return output;
+    }
+
+    // Nhận diện gợi ý loại chip giao tiếp USB từ usbVendorId / usbProductId (Chức năng 4)
+    function getUsbPortHint(portInfo) {
+      if (!portInfo || typeof portInfo.usbVendorId !== 'number') {
+        return 'Đã kết nối cổng nối tiếp (Thiết bị không báo mã USB Vendor ID cụ thể).';
+      }
+      const vid = portInfo.usbVendorId;
+      const pid = portInfo.usbProductId;
+      const vidHex = '0x' + vid.toString(16).toUpperCase().padStart(4, '0');
+      const pidHex = typeof pid === 'number'
+        ? '0x' + pid.toString(16).toUpperCase().padStart(4, '0')
+        : 'N/A';
+
+      if (vid === 0x2341 || vid === 0x2A03) {
+        return `Có thể là Arduino chính hãng (${vidHex}, PID: ${pidHex})`;
+      }
+      if (vid === 0x1A86) {
+        return `Có thể là board clone CH340 (${vidHex}, PID: ${pidHex})`;
+      }
+      if (vid === 0x10C4) {
+        return `CP210x (${vidHex}, PID: ${pidHex})`;
+      }
+      if (vid === 0x0403) {
+        return `FTDI (${vidHex}, PID: ${pidHex})`;
+      }
+      return `Thiết bị USB Serial khác (VID: ${vidHex}, PID: ${pidHex})`;
+    }
+
+    // Chuyển đổi mọi tình huống lỗi sang tiếng Việt dễ hiểu (Chức năng 6)
+    function translateFlashError(err, stage) {
+      const rawMsg = (err && (err.message || String(err))) ? (err.message || String(err)) : 'Lỗi không xác định';
+      const errName = (err && err.name) ? err.name : '';
+      const lower = rawMsg.toLowerCase();
+
+      if (errName === 'SecurityError' || lower.includes('permissions policy') || lower.includes('disallowed')) {
+        return (
+          'Khung xem trước hiện tại đang chặn quyền truy cập cổng USB (Web Serial API).\n' +
+          '• Cách khắc phục: Hãy tải file index.html về máy tính, mở bằng trình duyệt Chrome hoặc Edge (qua http://localhost) để kết nối USB và nạp code.'
+        );
+      }
+
+      if (
+        errName === 'NotFoundError' ||
+        lower.includes('no port selected') ||
+        lower.includes('user cancelled')
+      ) {
+        return (
+          'Bạn đã đóng bảng chọn cổng USB hoặc chưa chọn cổng COM nào.\n' +
+          '• Nếu đã cắm dây USB vào laptop nhưng bảng chọn cổng trống trơn: (1) Hãy kiểm tra cáp USB (nhiều cáp chỉ sạc, không truyền dữ liệu); (2) Nếu dùng Arduino Uno bản chip dán CH340 trên Windows, hãy cài đặt driver CH340.'
+        );
+      }
+
+      if (stage === 'fetch_hex' || lower.includes('hex_fetch_failed')) {
+        return (
+          `Không tải được file firmware (${rawMsg}).\n` +
+          '• Hãy bấm nút "Chọn file .hex từ máy" ngay phía trên nút Nạp để chọn file .hex từ máy tính.'
+        );
+      }
+
+      if (
+        errName === 'InvalidStateError' ||
+        errName === 'NetworkError' ||
+        lower.includes('failed to open serial port') ||
+        lower.includes('access denied') ||
+        lower.includes('busy') ||
+        lower.includes('in use')
+      ) {
+        return (
+          'Không thể mở cổng USB vì cổng COM đang bị chương trình khác chiếm giữ.\n' +
+          '• Vui lòng đóng phần mềm Arduino IDE, cửa sổ Serial Monitor, hoặc tab trình duyệt khác đang giữ cổng COM rồi thử lại.'
+        );
+      }
+
+      return (
+        `Nạp firmware thất bại giữa chừng (${rawMsg}).\n` +
+        '• Hãy kiểm tra: (1) Cáp USB truyền dữ liệu chắc chắn; (2) Tháo tạm các dây cắm ở chân D0 (RX) và D1 (TX) khi đang nạp; (3) Đảm bảo đúng board Arduino Uno (bootloader Optiboot 115200 baud).'
+      );
+    }
+
+    /* ==========================================================================
+       KHỐI 3: KIẾN TRÚC ADAPTER BOARD (CHỨC NĂNG 3 & RÀNG BUỘC 6)
+       Giải thích nguyên nhân lỗi "Sending 6400004620: receiveData timeout after 400ms"
+       và cách khắc phục triệt để:
+       - Trong giao thức STK500v1, lệnh 0x64 (STK_PROG_PAGE) có cấu trúc:
+         [0x64, lenHigh, lenLow, 0x46 ('F'), ...data, 0x20].
+       - Chuỗi "6400004620" nghĩa là lenHigh=0x00, lenLow=0x00 (độ dài trang = 0 byte!).
+       - Lý do: Hàm intelhex.parse(data) bên trong avrgirl-arduino kiểm tra `data.length`
+         và `data.charAt(pos)`. Khi truyền một `ArrayBuffer` thuần, `arrayBuffer.length`
+         là `undefined`, khiến vòng lặp giải mã HEX thoát ngay với Buffer 0 byte!
+       - Khắc phục:
+         1) Truyền `new String(hexText)` (typeof === 'object' nên không gọi fs.readFileSync,
+            nhưng có đầy đủ `.length`, `.charAt`, `.substr`, `.toString` cho intel-hex).
+         2) Bổ sung bộ nạp STK500v1 Web Serial trực tiếp dự phòng: nếu avrgirl-arduino
+            gặp bất kỳ lỗi cổng hay timeout nào, tự động giải phóng khóa luồng và nạp
+            trực tiếp từng trang 128 byte qua Web Serial.
+       ========================================================================== */
+
+    // Bộ nạp STK500v1 trực tiếp trên Web Serial (Optiboot 115200 baud cho Arduino Uno)
+    async function flashUnoDirectStk500v1(port, firmwareBytes, onProgress, onLog) {
+      onLog(`Chuyển sang chế độ nạp trực tiếp STK500v1 (Optiboot 115200 baud, ${firmwareBytes.length} byte)...`);
+
+      // Đảm bảo cổng đã đóng sạch trước khi mở lại ở 115200 baud
+      try {
+        if (port.readable && port.readable.locked) {
+          const r = port.readable.getReader();
+          await r.cancel();
+          r.releaseLock();
+        }
+      } catch (_e) {}
+      try {
+        if (port.writable && port.writable.locked) {
+          const w = port.writable.getWriter();
+          w.releaseLock();
+        }
+      } catch (_e) {}
+      try {
+        await port.close();
+      } catch (_e) {}
+
+      await port.open({ baudRate: 115200 });
+      const writer = port.writable.getWriter();
+      const reader = port.readable.getReader();
+      let rxBuffer = new Uint8Array(0);
+
+      const readResp = async (expectedLen, timeoutMs) => {
+        const deadline = Date.now() + timeoutMs;
+        while (rxBuffer.length < expectedLen) {
+          const remain = deadline - Date.now();
+          if (remain <= 0) {
+            throw new Error(`STK500v1 timeout sau ${timeoutMs}ms (nhận được ${rxBuffer.length}/${expectedLen} byte)`);
+          }
+          const readPromise = reader.read();
+          const timeoutPromise = new Promise((_, rej) =>
+            setTimeout(() => rej(new Error('READ_TIMEOUT')), remain)
+          );
+          const result = await Promise.race([readPromise, timeoutPromise]);
+          if (result.done) break;
+          if (result.value && result.value.length > 0) {
+            const merged = new Uint8Array(rxBuffer.length + result.value.length);
+            merged.set(rxBuffer, 0);
+            merged.set(result.value, rxBuffer.length);
+            rxBuffer = merged;
+          }
+        }
+        const out = rxBuffer.slice(0, expectedLen);
+        rxBuffer = rxBuffer.slice(expectedLen);
+        return out;
+      };
+
+      const sendCmdAndExpectOk = async (cmdBytes, timeoutMs = 600) => {
+        rxBuffer = new Uint8Array(0);
+        await writer.write(cmdBytes);
+        const resp = await readResp(2, timeoutMs);
+        if (resp[0] !== 0x14 || resp[1] !== 0x10) {
+          throw new Error(
+            `Phản hồi STK500 không hợp lệ: [0x${(resp[0] || 0).toString(16)}, 0x${(resp[1] || 0).toString(16)}]`
+          );
+        }
+      };
+
+      try {
+        // Bước 1: Kích xung Reset qua chân DTR/RTS để vào Optiboot bootloader
+        onProgress('erase', 45);
+        onLog('Đang kích xung DTR/RTS để đưa Arduino Uno vào chế độ Bootloader...');
+        await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+        await sleepMs(60);
+        await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+        await sleepMs(60);
+        await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+        await sleepMs(260);
+
+        // Bước 2: Đồng bộ STK_GET_SYNC (0x30 0x20)
+        let synced = false;
+        for (let attempt = 1; attempt <= 8; attempt++) {
+          try {
+            await sendCmdAndExpectOk(new Uint8Array([0x30, 0x20]), 250);
+            synced = true;
+            break;
+          } catch (_err) {
+            await sleepMs(60);
+          }
+        }
+        if (!synced) {
+          throw new Error('Không thể đồng bộ (STK_GET_SYNC) với bootloader Arduino Uno.');
+        }
+        onLog('Đã đồng bộ thành công với Optiboot bootloader!');
+
+        // Bước 3: Vào chế độ nạp STK_ENTER_PROGMODE (0x50 0x20)
+        await sendCmdAndExpectOk(new Uint8Array([0x50, 0x20]), 500);
+        onProgress('write', 55);
+
+        // Bước 4: Ghi từng trang 128 byte (STK_LOAD_ADDRESS 0x55 + STK_PROG_PAGE 0x64)
+        const pageSize = 128;
+        const totalBytes = firmwareBytes.length;
+        for (let offset = 0; offset < totalBytes; offset += pageSize) {
+          const wordAddr = offset >> 1;
+          const addrLow = wordAddr & 0xFF;
+          const addrHigh = (wordAddr >> 8) & 0xFF;
+          await sendCmdAndExpectOk(new Uint8Array([0x55, addrLow, addrHigh, 0x20]), 500);
+
+          const chunk = firmwareBytes.slice(offset, Math.min(offset + pageSize, totalBytes));
+          const lenHigh = (chunk.length >> 8) & 0xFF;
+          const lenLow = chunk.length & 0xFF;
+          const progCmd = new Uint8Array(4 + chunk.length + 1);
+          progCmd[0] = 0x64; // STK_PROG_PAGE
+          progCmd[1] = lenHigh;
+          progCmd[2] = lenLow;
+          progCmd[3] = 0x46; // 'F' (Flash)
+          progCmd.set(chunk, 4);
+          progCmd[4 + chunk.length] = 0x20; // CRC_EOP
+
+          await sendCmdAndExpectOk(progCmd, 1200);
+
+          const pct = Math.min(92, 55 + Math.round(((offset + chunk.length) / totalBytes) * 37));
+          onProgress('write', pct);
+        }
+
+        onLog(`Đã ghi xong toàn bộ ${totalBytes} byte chương trình xuống bộ nhớ Flash.`);
+        onProgress('verify', 95);
+
+        // Bước 5: Thoát chế độ nạp STK_LEAVE_PROGMODE (0x51 0x20)
+        await sendCmdAndExpectOk(new Uint8Array([0x51, 0x20]), 500);
+        onProgress('done', 100);
+      } finally {
+        try {
+          reader.releaseLock();
+        } catch (_e) {}
+        try {
+          writer.releaseLock();
+        } catch (_e) {}
+        try {
+          await port.close();
+        } catch (_e) {}
+      }
+    }
+
+    const BOARD_ADAPTERS = {
+      uno: {
+        name: 'Arduino Uno (ATmega328P - STK500v1)',
+
+        async connectAndFlash(project, onProgress, onLog, onPortInfo, existingPort) {
+          if (!('serial' in navigator)) {
+            throw new Error('Trình duyệt không hỗ trợ Web Serial API.');
+          }
+
+          // Bước 1: Chuẩn bị và kiểm tra dữ liệu file .hex trước
+          onProgress('connect', 15);
+          let hexText = '';
+
+          if (project.hexContent && project.hexContent.trim().startsWith(':')) {
+            hexText = project.hexContent.trim();
+            onLog(`Sử dụng bản biên dịch "${project.hexFileName || project.id + '.hex'}".`);
+          } else {
+            onLog(`Đang tải file firmware từ đường dẫn: ${project.hexPath} ...`);
+            try {
+              const response = await fetch(project.hexPath, { cache: 'no-store' });
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+              }
+              const fetched = await response.text();
+              if (!fetched.trim().startsWith(':')) {
+                throw new Error('Nội dung không phải Intel HEX');
+              }
+              hexText = fetched.trim();
+              onLog(`Đã tải xong file ${project.hexPath} từ máy chủ.`);
+            } catch (_fetchErr) {
+              onLog(
+                `Lưu ý: Không tìm thấy file "${project.hexPath}" trên máy chủ. Đang dùng khung Intel HEX dự phòng.`
+              );
+              hexText = FALLBACK_INTEL_HEX;
+            }
+          }
+
+          // Giải mã kiểm tra trước số byte thực tế để đảm bảo không bao giờ nạp 0 byte (lỗi 6400004620)
+          const parsedBytes = parseIntelHexToBytes(hexText);
+          onLog(`Đã kiểm tra định dạng Intel HEX hợp lệ: ${parsedBytes.length} byte mã máy ATmega328P.`);
+
+          const AvrgirlClass = window.AvrgirlArduino;
+          if (typeof AvrgirlClass !== 'function') {
+            throw new Error(
+              'Không tìm thấy thư viện window.AvrgirlArduino từ CDN. Vui lòng kiểm tra kết nối mạng.'
+            );
+          }
+
+          let capturedPort = existingPort || null;
+          const originalRequestPort = navigator.serial.requestPort.bind(navigator.serial);
+          navigator.serial.requestPort = async function (...args) {
+            if (capturedPort) {
+              const info = typeof capturedPort.getInfo === 'function' ? capturedPort.getInfo() : {};
+              if (typeof onPortInfo === 'function') {
+                onPortInfo(info, capturedPort);
+              }
+              onLog('Sử dụng cổng USB đã kết nối: ' + getUsbPortHint(info));
+              return capturedPort;
+            }
+            onLog('Đang mở hộp thoại chọn cổng USB của trình duyệt...');
+            const selectedPort = await originalRequestPort(...args);
+            capturedPort = selectedPort;
+            const info = typeof selectedPort.getInfo === 'function' ? selectedPort.getInfo() : {};
+            if (typeof onPortInfo === 'function') {
+              onPortInfo(info, selectedPort);
+            }
+            onLog('Gợi ý nhận diện cổng: ' + getUsbPortHint(info));
+            return selectedPort;
+          };
+
+          try {
+            onProgress('erase', 40);
+            onLog('Khởi tạo avrgirl-arduino (board: "uno") và bắt đầu ghi firmware...');
+
+            // QUAN TRỌNG: Truyền `new String(hexText)` thay vì `ArrayBuffer`!
+            // Trong avrgirl-arduino, `typeof (new String(hexText))` là `'object'` (không gọi fs.readFileSync),
+            // đồng thời giữ nguyên `.length`, `.charAt()`, `.substr()`, `.toString()` cho `intel-hex` giải mã đúng toàn bộ byte!
+            const hexStringObject = new String(hexText);
+
+            await new Promise((resolve, reject) => {
+              let writeStepTriggered = false;
+
+              const avrgirl = new AvrgirlClass({
+                board: 'uno',
+                debug: function (debugMsg) {
+                  const cleanMsg = String(debugMsg).replace(/\x1b\[[0-9;]*m/g, '').trim();
+                  if (!cleanMsg) return;
+                  onLog('[avrgirl] ' + cleanMsg);
+
+                  const lowerMsg = cleanMsg.toLowerCase();
+                  if (lowerMsg.includes('reset') || lowerMsg.includes('connected')) {
+                    onProgress('erase', 55);
+                  } else if (lowerMsg.includes('flashing') || lowerMsg.includes('upload')) {
+                    writeStepTriggered = true;
+                    onProgress('write', 75);
+                    setTimeout(() => {
+                      if (writeStepTriggered) {
+                        onProgress('verify', 90);
+                      }
+                    }, 650);
+                  } else if (lowerMsg.includes('flash complete')) {
+                    writeStepTriggered = false;
+                    onProgress('done', 100);
+                  }
+                }
+              });
+
+              avrgirl.flash(hexStringObject, function (error) {
+                writeStepTriggered = false;
+                if (error) {
+                  reject(error);
+                } else {
+                  onProgress('done', 100);
+                  resolve();
+                }
+              });
+            });
+          } catch (avrgirlErr) {
+            // Nếu avrgirl-arduino vẫn báo lỗi timeout (do xung đột luồng browser-serialport),
+            // tự động chuyển sang bộ nạp STK500v1 Web Serial trực tiếp trên cổng đã chọn
+            if (capturedPort) {
+              onLog(`Cảnh báo từ avrgirl-arduino (${avrgirlErr.message || avrgirlErr}). Đang tự động chuyển sang bộ nạp STK500v1 trực tiếp...`);
+              await flashUnoDirectStk500v1(capturedPort, parsedBytes, onProgress, onLog);
+            } else {
+              throw avrgirlErr;
+            }
+          } finally {
+            navigator.serial.requestPort = originalRequestPort;
+          }
+        }
+      }
+      /*
+       * Chừa sẵn chỗ mở rộng cho adapter ESP32:
+       * esp32: { connectAndFlash(project, onProgress, onLog, onPortInfo, existingPort) { ... } }
+       */
+    };
+
+    /* ==========================================================================
+       KHỐI 4: ĐIỀU KHIỂN GIAO DIỆN (UI), KẾT NỐI USB, SỬA TÊN, THÊM DỰ ÁN & QR
+       ========================================================================== */
+    const state = {
+      selectedProject: PROJECTS[0],
+      isFlashing: false,
+      connectedPort: null,
+      webSerialSupported: typeof navigator !== 'undefined' && 'serial' in navigator
+    };
+
+    const dom = {
+      connectUsbBtn: document.getElementById('connectUsbBtn'),
+      connectUsbBtnText: document.getElementById('connectUsbBtnText'),
+      statusBadge: document.getElementById('statusBadge'),
+      statusText: document.getElementById('statusText'),
+      browserWarning: document.getElementById('browserWarning'),
+      projectCount: document.getElementById('projectCount'),
+      projectList: document.getElementById('projectList'),
+      openAddModalBtn: document.getElementById('openAddModalBtn'),
+      detailTitle: document.getElementById('detailTitle'),
+      toggleRenameBtn: document.getElementById('toggleRenameBtn'),
+      renameBox: document.getElementById('renameBox'),
+      renameInput: document.getElementById('renameInput'),
+      saveRenameBtn: document.getElementById('saveRenameBtn'),
+      cancelRenameBtn: document.getElementById('cancelRenameBtn'),
+      detailDesc: document.getElementById('detailDesc'),
+      detailBoard: document.getElementById('detailBoard'),
+      detailVersion: document.getElementById('detailVersion'),
+      detailHexPath: document.getElementById('detailHexPath'),
+      wiringSection: document.getElementById('wiringSection'),
+      detailWiring: document.getElementById('detailWiring'),
+      detailInoFileName: document.getElementById('detailInoFileName'),
+      detailInoCode: document.getElementById('detailInoCode'),
+      copyInoBtn: document.getElementById('copyInoBtn'),
+      copyInoText: document.getElementById('copyInoText'),
+      downloadInoBtn: document.getElementById('downloadInoBtn'),
+      downloadHexBtn: document.getElementById('downloadHexBtn'),
+      hexSourceStatus: document.getElementById('hexSourceStatus'),
+      customHexFileInput: document.getElementById('customHexFileInput'),
+      pickHexFileBtn: document.getElementById('pickHexFileBtn'),
+      flashBtn: document.getElementById('flashBtn'),
+      portHintBox: document.getElementById('portHintBox'),
+      portHintTitle: document.getElementById('portHintTitle'),
+      progressBarFill: document.getElementById('progressBarFill'),
+      errorBanner: document.getElementById('errorBanner'),
+      qrContainer: document.getElementById('qrContainer'),
+      shareUrlBox: document.getElementById('shareUrlBox'),
+      downloadQrBtn: document.getElementById('downloadQrBtn'),
+      logOutput: document.getElementById('logOutput'),
+      copyLogBtn: document.getElementById('copyLogBtn'),
+      copyLogText: document.getElementById('copyLogText'),
+      addProjectModal: document.getElementById('addProjectModal'),
+      closeAddModalBtn: document.getElementById('closeAddModalBtn'),
+      cancelAddModalBtn: document.getElementById('cancelAddModalBtn'),
+      confirmAddProjBtn: document.getElementById('confirmAddProjBtn'),
+      newProjName: document.getElementById('newProjName'),
+      newProjDesc: document.getElementById('newProjDesc'),
+      newProjWiring: document.getElementById('newProjWiring'),
+      newProjInoFile: document.getElementById('newProjInoFile'),
+      newProjInoCode: document.getElementById('newProjInoCode'),
+      newProjHexFile: document.getElementById('newProjHexFile'),
+      modalErrorMsg: document.getElementById('modalErrorMsg'),
+      steps: {
+        connect: document.getElementById('step-connect'),
+        erase: document.getElementById('step-erase'),
+        write: document.getElementById('step-write'),
+        verify: document.getElementById('step-verify'),
+        done: document.getElementById('step-done')
+      }
+    };
+
+    const STEP_ORDER = ['connect', 'erase', 'write', 'verify', 'done'];
+
+    function appendLog(message) {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      dom.logOutput.textContent += `[${timeStr}] ${message}\n`;
+      dom.logOutput.scrollTop = dom.logOutput.scrollHeight;
+    }
+
+    function setGlobalStatus(mode) {
+      dom.statusBadge.className = 'status-pill';
+      if (mode === 'flashing') {
+        dom.statusBadge.classList.add('status-flashing');
+        dom.statusText.textContent = 'Đang nạp';
+      } else if (mode === 'success') {
+        dom.statusBadge.classList.add('status-success');
+        dom.statusText.textContent = 'Thành công';
+      } else if (mode === 'error') {
+        dom.statusBadge.classList.add('status-error');
+        dom.statusText.textContent = 'Lỗi';
+      } else if (mode === 'connected' || state.connectedPort) {
+        dom.statusBadge.classList.add('status-connected');
+        dom.statusText.textContent = 'Đã kết nối USB';
+        dom.connectUsbBtnText.textContent = 'Đổi cổng USB';
+      } else {
+        dom.statusBadge.classList.add('status-idle');
+        dom.statusText.textContent = 'Chưa kết nối';
+        dom.connectUsbBtnText.textContent = 'Kết nối cổng USB';
+      }
+    }
+
+    function updateProgressUI(activeStepKey, percent, isError) {
+      dom.progressBarFill.style.width = `${Math.max(0, Math.min(100, percent || 0))}%`;
+      const activeIdx = STEP_ORDER.indexOf(activeStepKey);
+      STEP_ORDER.forEach((key, idx) => {
+        const el = dom.steps[key];
+        el.className = 'step-item';
+        if (activeIdx === -1) return;
+        if (isError && idx === activeIdx) {
+          el.classList.add('error');
+        } else if (idx < activeIdx || (activeStepKey === 'done' && idx === activeIdx)) {
+          el.classList.add('done');
+        } else if (idx === activeIdx) {
+          el.classList.add('active');
+        }
+      });
+    }
+
+    function setConnectedPort(port) {
+      state.connectedPort = port || null;
+      if (port) {
+        const info = typeof port.getInfo === 'function' ? port.getInfo() : {};
+        const hint = getUsbPortHint(info);
+        dom.portHintTitle.textContent = hint;
+        dom.portHintBox.classList.add('visible');
+        setGlobalStatus('connected');
+        appendLog('Đã kết nối cổng USB: ' + hint);
+      } else {
+        setGlobalStatus('idle');
+      }
+    }
+
+    async function handleConnectUsbClick() {
+      if (!state.webSerialSupported) return;
+      dom.errorBanner.classList.remove('visible');
+      try {
+        appendLog('Đang mở cửa sổ chọn cổng USB (navigator.serial.requestPort)...');
+        const port = await navigator.serial.requestPort();
+        setConnectedPort(port);
+      } catch (err) {
+        const friendly = translateFlashError(err, 'connect');
+        dom.errorBanner.textContent = friendly;
+        dom.errorBanner.classList.add('visible');
+        appendLog('Chưa chọn được cổng USB: ' + friendly.replace(/\n/g, ' '));
+      }
+    }
+
+    async function checkPreviouslyGrantedPorts() {
+      if (!state.webSerialSupported || typeof navigator.serial.getPorts !== 'function') return;
+      try {
+        const ports = await navigator.serial.getPorts();
+        if (ports && ports.length > 0) {
+          setConnectedPort(ports[0]);
+          appendLog(`Tự động nhận diện ${ports.length} cổng USB đã cấp quyền trước đó.`);
+        } else {
+          appendLog('Chưa có cổng USB nào được cấp quyền trước đó. Hãy bấm "Kết nối cổng USB" hoặc "Nạp vào board" để chọn cổng COM.');
+        }
+      } catch (_e) {
+        // Bỏ qua nếu iframe chặn getPorts
+      }
+    }
+
+    function renderProjectCards() {
+      dom.projectCount.textContent = `(${PROJECTS.length} dự án)`;
+      dom.projectList.innerHTML = '';
+
+      PROJECTS.forEach((proj) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'project-card' + (state.selectedProject.id === proj.id ? ' active' : '');
+        card.setAttribute('aria-pressed', state.selectedProject.id === proj.id ? 'true' : 'false');
+
+        const header = document.createElement('div');
+        header.className = 'card-header';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'card-name';
+        nameEl.textContent = proj.name;
+
+        const badges = document.createElement('div');
+        badges.className = 'badges';
+
+        if (proj.hexContent && proj.hexContent.trim().startsWith(':')) {
+          const hexBadge = document.createElement('span');
+          hexBadge.className = 'badge badge-hex-ready';
+          hexBadge.textContent = 'Có sẵn .HEX';
+          badges.appendChild(hexBadge);
+        }
+
+        const boardBadge = document.createElement('span');
+        boardBadge.className = 'badge badge-board';
+        boardBadge.textContent = proj.board;
+
+        const verBadge = document.createElement('span');
+        verBadge.className = 'badge badge-version';
+        verBadge.textContent = 'v' + proj.version;
+
+        badges.appendChild(boardBadge);
+        badges.appendChild(verBadge);
+        header.appendChild(nameEl);
+        header.appendChild(badges);
+
+        const descEl = document.createElement('p');
+        descEl.className = 'card-desc';
+        descEl.textContent = proj.description;
+
+        card.appendChild(header);
+        card.appendChild(descEl);
+
+        card.addEventListener('click', () => {
+          if (state.isFlashing) return;
+          selectProjectById(proj.id, true);
+        });
+
+        dom.projectList.appendChild(card);
+      });
+    }
+
+    function getProjectShareUrl(projectId) {
+      const baseUrl = window.location.href.split('#')[0];
+      return `${baseUrl}#${projectId}`;
+    }
+
+    function renderQrCode(project) {
+      const shareUrl = getProjectShareUrl(project.id);
+      dom.shareUrlBox.textContent = shareUrl;
+      dom.qrContainer.innerHTML = '';
+
+      if (typeof window.QRCode === 'function') {
+        new window.QRCode(dom.qrContainer, {
+          text: shareUrl,
+          width: 136,
+          height: 136,
+          colorDark: '#0f172a',
+          colorLight: '#ffffff',
+          correctLevel: window.QRCode.CorrectLevel.M
+        });
+      } else {
+        const fallbackMsg = document.createElement('span');
+        fallbackMsg.style.fontSize = '0.8rem';
+        fallbackMsg.style.color = '#64748b';
+        fallbackMsg.textContent = 'Không tải được thư viện QR.';
+        dom.qrContainer.appendChild(fallbackMsg);
+      }
+    }
+
+    function updateHexStatusText(proj) {
+      if (proj.hexContent && proj.hexContent.trim().startsWith(':')) {
+        const lineCount = proj.hexContent.trim().split(/\r?\n/).length;
+        dom.hexSourceStatus.textContent = `Đã nhúng sẵn "${proj.hexFileName || proj.id + '.hex'}" (${lineCount} dòng lệnh Intel HEX - Sẵn sàng nạp ngay)`;
+        dom.hexSourceStatus.style.color = 'var(--primary)';
+      } else {
+        dom.hexSourceStatus.textContent = `Tự động tải từ "${proj.hexPath}" (hoặc bấm nút bên cạnh để chọn file .hex)`;
+        dom.hexSourceStatus.style.color = '';
+      }
+    }
+
+    function selectProjectById(projectId, updateHash) {
+      const found = PROJECTS.find((p) => p.id === projectId) || PROJECTS[0];
+      state.selectedProject = found;
+
+      if (updateHash && window.location.hash !== `#${found.id}`) {
+        history.replaceState(null, '', `#${found.id}`);
+      }
+
+      dom.renameBox.classList.remove('visible');
+      renderProjectCards();
+
+      dom.detailTitle.textContent = found.name;
+      dom.detailDesc.textContent = found.description;
+      dom.detailBoard.textContent = found.board.toUpperCase();
+      dom.detailVersion.textContent = found.version;
+      dom.detailHexPath.textContent = found.hexFileName || found.hexPath;
+
+      if (found.wiringNote) {
+        dom.wiringSection.style.display = 'block';
+        dom.detailWiring.textContent = found.wiringNote;
+      } else {
+        dom.wiringSection.style.display = 'none';
+      }
+
+      dom.detailInoFileName.textContent = found.inoFileName || `${found.id}.ino`;
+      dom.detailInoCode.textContent = found.inoCode || '// Chưa có mã nguồn .ino cho dự án này.';
+      updateHexStatusText(found);
+
+      if (!state.isFlashing) {
+        updateProgressUI('', 0, false);
+        dom.errorBanner.classList.remove('visible');
+        dom.errorBanner.textContent = '';
+      }
+
+      renderQrCode(found);
+      appendLog(`Đã chọn dự án "${found.name}" (#${found.id}).`);
+    }
+
+    function handleToggleRename() {
+      const isVisible = dom.renameBox.classList.contains('visible');
+      if (isVisible) {
+        dom.renameBox.classList.remove('visible');
+      } else {
+        dom.renameInput.value = state.selectedProject.name;
+        dom.renameBox.classList.add('visible');
+        dom.renameInput.focus();
+        dom.renameInput.select();
+      }
+    }
+
+    function handleSaveRename() {
+      const newName = (dom.renameInput.value || '').trim();
+      if (!newName) return;
+      const oldName = state.selectedProject.name;
+      state.selectedProject.name = newName;
+      dom.detailTitle.textContent = newName;
+      dom.renameBox.classList.remove('visible');
+      renderProjectCards();
+      appendLog(`Đã đổi tên dự án từ "${oldName}" thành "${newName}".`);
+    }
+
+    async function handleCopyIno() {
+      const code = state.selectedProject.inoCode || '';
+      let ok = false;
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+          await navigator.clipboard.writeText(code);
+          ok = true;
+        } catch (_e) {
+          ok = false;
+        }
+      }
+      if (!ok) {
+        const ta = document.createElement('textarea');
+        ta.value = code;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          ok = true;
+        } catch (_err) {
+          ok = false;
+        }
+        document.body.removeChild(ta);
+      }
+      if (ok) {
+        dom.copyInoText.textContent = 'Đã sao chép!';
+        setTimeout(() => {
+          dom.copyInoText.textContent = 'Sao chép code .ino';
+        }, 1600);
+        appendLog(`Đã sao chép mã nguồn ${state.selectedProject.inoFileName || 'code.ino'} vào bộ nhớ tạm.`);
+      }
+    }
+
+    function handleDownloadIno() {
+      const proj = state.selectedProject;
+      const fileName = proj.inoFileName || `${proj.id}.ino`;
+      const blob = new Blob([proj.inoCode || ''], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      appendLog(`Đã tải xuống tệp mã nguồn: ${fileName}`);
+    }
+
+    function handleDownloadHex() {
+      const proj = state.selectedProject;
+      const hexData = (proj.hexContent && proj.hexContent.trim().startsWith(':'))
+        ? proj.hexContent
+        : FALLBACK_INTEL_HEX;
+      const fileName = proj.hexFileName || `${proj.id}.hex`;
+      const blob = new Blob([hexData], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      appendLog(`Đã tải xuống tệp biên dịch: ${fileName}`);
+    }
+
+    function handleCustomHexSelected(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const content = String(e.target.result || '').trim();
+        if (!content.startsWith(':')) {
+          dom.errorBanner.textContent = `File "${file.name}" không đúng chuẩn Intel HEX (phải bắt đầu bằng dấu ':').`;
+          dom.errorBanner.classList.add('visible');
+          return;
+        }
+        dom.errorBanner.classList.remove('visible');
+        state.selectedProject.hexContent = content;
+        state.selectedProject.hexFileName = file.name;
+        dom.detailHexPath.textContent = file.name;
+        updateHexStatusText(state.selectedProject);
+        renderProjectCards();
+        appendLog(`Đã cập nhật file "${file.name}" (${content.length} ký tự) cho dự án "${state.selectedProject.name}".`);
+      };
+      reader.readAsText(file);
+    }
+
+    function openAddModal() {
+      dom.newProjName.value = '';
+      dom.newProjDesc.value = '';
+      dom.newProjWiring.value = '';
+      dom.newProjInoCode.value = '';
+      dom.newProjInoFile.value = '';
+      dom.newProjHexFile.value = '';
+      dom.modalErrorMsg.style.display = 'none';
+      dom.addProjectModal.classList.add('visible');
+      dom.newProjName.focus();
+    }
+
+    function closeAddModal() {
+      dom.addProjectModal.classList.remove('visible');
+    }
+
+    function slugifyId(text) {
+      const base = text
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'du-an';
+      let candidate = base;
+      let counter = 2;
+      while (PROJECTS.some((p) => p.id === candidate)) {
+        candidate = `${base}-${counter}`;
+        counter++;
+      }
+      return candidate;
+    }
+
+    function handleConfirmAddProject() {
+      const name = (dom.newProjName.value || '').trim();
+      if (!name) {
+        dom.modalErrorMsg.textContent = 'Vui lòng nhập tên dự án.';
+        dom.modalErrorMsg.style.display = 'block';
+        dom.newProjName.focus();
+        return;
+      }
+
+      const id = slugifyId(name);
+      const desc = (dom.newProjDesc.value || '').trim() || 'Dự án Arduino Uno do người dùng thêm.';
+      const wiring = (dom.newProjWiring.value || '').trim() || 'Xem chi tiết chân kết nối trong mã nguồn .ino bên dưới.';
+      const inoCode = dom.newProjInoCode.value || '// Chưa nhập mã nguồn .ino';
+      const inoFileObj = dom.newProjInoFile.files && dom.newProjInoFile.files[0];
+      const inoFileName = inoFileObj ? inoFileObj.name : `${id}.ino`;
+
+      const createAndSelect = (hexContent, hexFileName) => {
+        const newProj = {
+          id: id,
+          name: name,
+          description: desc,
+          board: 'uno',
+          hexPath: `firmware/${id}.hex`,
+          version: '1.0.0',
+          wiringNote: wiring,
+          inoFileName: inoFileName,
+          inoCode: inoCode,
+          hexContent: hexContent || '',
+          hexFileName: hexFileName || ''
+        };
+        PROJECTS.unshift(newProj);
+        closeAddModal();
+        selectProjectById(newProj.id, true);
+        appendLog(`Đã thêm dự án mới: "${newProj.name}" (#${newProj.id}).`);
+      };
+
+      const hexFileObj = dom.newProjHexFile.files && dom.newProjHexFile.files[0];
+      if (hexFileObj) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          createAndSelect(String(e.target.result || '').trim(), hexFileObj.name);
+        };
+        reader.readAsText(hexFileObj);
+      } else {
+        createAndSelect('', '');
+      }
+    }
+
+    async function handleFlashClick() {
+      if (state.isFlashing || !state.webSerialSupported) return;
+
+      const project = state.selectedProject;
+      const adapter = BOARD_ADAPTERS[project.board];
+
+      dom.errorBanner.classList.remove('visible');
+      dom.errorBanner.textContent = '';
+
+      if (!adapter) {
+        const msg = `Chưa có adapter hỗ trợ cho loại board "${project.board}".`;
+        setGlobalStatus('error');
+        dom.errorBanner.textContent = msg;
+        dom.errorBanner.classList.add('visible');
+        appendLog('LỖI: ' + msg);
+        return;
+      }
+
+      state.isFlashing = true;
+      dom.flashBtn.disabled = true;
+      setGlobalStatus('flashing');
+      let currentStep = 'connect';
+      let currentPercent = 15;
+
+      try {
+        await adapter.connectAndFlash(
+          project,
+          (stepKey, percent) => {
+            currentStep = stepKey;
+            currentPercent = percent;
+            updateProgressUI(stepKey, percent, false);
+          },
+          (logMsg) => {
+            appendLog(logMsg);
+          },
+          (portInfo, portObj) => {
+            state.connectedPort = portObj || state.connectedPort;
+            dom.portHintTitle.textContent = getUsbPortHint(portInfo);
+            dom.portHintBox.classList.add('visible');
+          },
+          state.connectedPort
+        );
+
+        setGlobalStatus('success');
+        updateProgressUI('done', 100, false);
+        appendLog(`HOÀN TẤT: Đã nạp thành công dự án "${project.name}" vào Arduino Uno!`);
+      } catch (err) {
+        const stage = err && err.stage ? err.stage : currentStep;
+        const friendlyMsg = translateFlashError(err, stage);
+
+        setGlobalStatus('error');
+        updateProgressUI(currentStep, currentPercent, true);
+        dom.errorBanner.textContent = friendlyMsg;
+        dom.errorBanner.classList.add('visible');
+        appendLog('LỖI NẠP: ' + friendlyMsg.replace(/\n/g, ' '));
+      } finally {
+        state.isFlashing = false;
+        dom.flashBtn.disabled = !state.webSerialSupported;
+      }
+    }
+
+    function handleDownloadQr() {
+      const project = state.selectedProject;
+      const canvas = dom.qrContainer.querySelector('canvas');
+      const img = dom.qrContainer.querySelector('img');
+
+      let dataUrl = '';
+      if (canvas && typeof canvas.toDataURL === 'function') {
+        dataUrl = canvas.toDataURL('image/png');
+      } else if (img && img.src && img.src.startsWith('data:image')) {
+        dataUrl = img.src;
+      }
+
+      if (!dataUrl) {
+        appendLog('Không tìm thấy dữ liệu ảnh QR để tải xuống.');
+        return;
+      }
+
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `qr-${project.id}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      appendLog(`Đã tải ảnh mã QR: qr-${project.id}.png`);
+    }
+
+    async function handleCopyLog() {
+      const text = dom.logOutput.textContent || '';
+      let copied = false;
+
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch (_e) {
+          copied = false;
+        }
+      }
+
+      if (!copied) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          document.execCommand('copy');
+          copied = true;
+        } catch (_err) {
+          copied = false;
+        }
+        document.body.removeChild(textarea);
+      }
+
+      if (copied) {
+        dom.copyLogText.textContent = 'Đã sao chép!';
+        setTimeout(() => {
+          dom.copyLogText.textContent = 'Sao chép log';
+        }, 1800);
+      }
+    }
+
+    function initApp() {
+      appendLog('Khởi động Trạm Nạp & Quản Lý Dự Án Arduino Uno (Đã sửa lỗi 6400004620 & nhúng sẵn 3 file .hex).');
+
+      if (!state.webSerialSupported) {
+        dom.browserWarning.classList.add('visible');
+        dom.flashBtn.disabled = true;
+        dom.connectUsbBtn.disabled = true;
+        appendLog('CẢNH BÁO: Trình duyệt không có navigator.serial. Đã vô hiệu hóa nút Nạp.');
+      } else {
+        appendLog('Trình duyệt hỗ trợ Web Serial API (navigator.serial).');
+        checkPreviouslyGrantedPorts();
+
+        navigator.serial.addEventListener('connect', (event) => {
+          if (event && event.target) {
+            setConnectedPort(event.target);
+          }
+        });
+        navigator.serial.addEventListener('disconnect', (event) => {
+          if (event && event.target === state.connectedPort) {
+            state.connectedPort = null;
+            setGlobalStatus('idle');
+            appendLog('Cổng USB Arduino vừa được rút ra (Ngắt kết nối).');
+          }
+        });
+      }
+
+      const initialHash = (window.location.hash || '').replace(/^#/, '').trim();
+      const initialId = PROJECTS.some((p) => p.id === initialHash) ? initialHash : PROJECTS[0].id;
+      selectProjectById(initialId, false);
+
+      window.addEventListener('hashchange', () => {
+        if (state.isFlashing) return;
+        const hashId = (window.location.hash || '').replace(/^#/, '').trim();
+        if (hashId && PROJECTS.some((p) => p.id === hashId)) {
+          selectProjectById(hashId, false);
+        }
+      });
+
+      dom.connectUsbBtn.addEventListener('click', handleConnectUsbClick);
+      dom.flashBtn.addEventListener('click', handleFlashClick);
+
+      dom.toggleRenameBtn.addEventListener('click', handleToggleRename);
+      dom.saveRenameBtn.addEventListener('click', handleSaveRename);
+      dom.cancelRenameBtn.addEventListener('click', () => dom.renameBox.classList.remove('visible'));
+      dom.renameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleSaveRename();
+        if (e.key === 'Escape') dom.renameBox.classList.remove('visible');
+      });
+
+      dom.copyInoBtn.addEventListener('click', handleCopyIno);
+      dom.downloadInoBtn.addEventListener('click', handleDownloadIno);
+      dom.downloadHexBtn.addEventListener('click', handleDownloadHex);
+      dom.pickHexFileBtn.addEventListener('click', () => dom.customHexFileInput.click());
+      dom.customHexFileInput.addEventListener('change', handleCustomHexSelected);
+
+      dom.openAddModalBtn.addEventListener('click', openAddModal);
+      dom.closeAddModalBtn.addEventListener('click', closeAddModal);
+      dom.cancelAddModalBtn.addEventListener('click', closeAddModal);
+      dom.confirmAddProjBtn.addEventListener('click', handleConfirmAddProject);
+      dom.newProjInoFile.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (!dom.newProjName.value.trim()) {
+          dom.newProjName.value = file.name.replace(/\.[^/.]+$/, '');
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          dom.newProjInoCode.value = String(ev.target.result || '');
+        };
+        reader.readAsText(file);
+      });
+
+      dom.downloadQrBtn.addEventListener('click', handleDownloadQr);
+      dom.copyLogBtn.addEventListener('click', handleCopyLog);
+    }
+
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>
